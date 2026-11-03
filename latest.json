@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "appId": "com.soloplay.freetv",
+  "versionCode": 1,
+  "versionName": "0.1.0",
+  "updatedAt": "2026-11-03T00:00:00Z",
+  "releaseNotes": "First public build.",
+  "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
+  "fileName": "SoluPlay.apk",
+  "sizeBytes": 0,
+  "sha256": "",
+  "android": {
+    "packageName": "com.soloplay.freetv",
+    "minSdkVersion": 21,
+    "minAndroidVersion": "5.0",
+    "targetSdkVersion": 34
+  },
+  "variants": {
+    "phone": {
+      "label": "Android Phone & Tablet",
+      "url": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
+      "fileName": "SoluPlay.apk",
+      "sizeBytes": 0,
+      "sha256": "",
+      "minSdkVersion": 21
+    },
+    "tv": {
+      "label": "Android TV & TV Boxes",
+      "url": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
+      "fileName": "SoluPlay.apk",
+      "sizeBytes": 0,
+      "sha256": "",
+      "minSdkVersion": 21
+    }
+  }
+}
