@@ -1,16 +1,20 @@
 {
   "schemaVersion": 1,
-  "appId": "com.soloplay.freetv",
+  "appId": "com.soluplay.app",
   "versionCode": 1,
   "versionName": "0.1.0",
   "updatedAt": "2026-11-03T00:00:00Z",
   "releaseNotes": "First public build.",
+  "apkUrl": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
   "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
   "fileName": "SoluPlay.apk",
   "sizeBytes": 0,
   "sha256": "",
+  "mandatory": false,
+  "minSupportedVersionCode": 1,
+  "rolloutPercent": 100,
   "android": {
-    "packageName": "com.soloplay.freetv",
+    "packageName": "com.soluplay.app",
     "minSdkVersion": 21,
     "minAndroidVersion": "5.0",
     "targetSdkVersion": 34

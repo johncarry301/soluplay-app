@@ -1,15 +1,93 @@
-# SoluPlay App — releases and update manifest
+# SoluPlay App — the Android app, its releases and the update manifest
 
-This repository holds the published SoluPlay Android builds and the release
-manifest that the download page reads. It is a **separate account** from the
-main SoluPlay project and shares nothing with it.
+This repository holds the SoluPlay Android app, the published builds the
+download page serves, and the release manifest that page reads. It is a
+**separate account** from the main SoluPlay project and shares nothing with it.
+
+`PLAN.md` is the spec of record for the app: the phases, the gates and the
+decisions, with every later change appended as a numbered amendment.
 
 ## What lives here
 
 | Path | Purpose |
 | --- | --- |
+| `app/` | The Android application module. Both launchers live here. |
+| `core/` | Shared code: API, models, the ladder, the player, the updater. |
+| `feature-phone/` | The handset UI. |
+| `feature-tv/` | The TV UI. It also ships inside the phone APK. |
+| `scripts/` | The build helper and the release-key generator. |
+| `.github/workflows/android.yml` | CI: tests, lint, and the signed release. |
 | `latest.json` | The manifest. The single source of truth for the current version. |
 | GitHub Releases | The APK assets themselves. The release must be **public**. |
+
+`core/`, `feature-phone/` and `feature-tv/` are source directories of the one
+Gradle module, not separate modules: the shared code is on every variant, the
+phone UI only on the phone flavour, and the TV UI on both.
+
+## Two flavours, one shipped APK
+
+| Flavour | Application id | Shipped |
+| --- | --- | --- |
+| `phone` | `com.soluplay.app` | Yes — carries the handset **and** the TV launcher |
+| `tv` | `com.soluplay.tv` | Not yet — prepared for the split |
+
+One APK covers a phone and an Android TV box. The split becomes real when the
+app is listed on the Play Store with a dedicated TV section, or when the two
+release cadences diverge.
+
+## Building
+
+The build needs JDK 17 and the Android SDK (platform 34, build-tools 34.0.0)
+and downloads nothing:
+
+```bash
+scripts/build.sh
+```
+
+That builds both debug flavours and runs the unit tests. It points at the
+portable toolchain on this machine; on another machine, set `JAVA_HOME` and
+`ANDROID_HOME` first. `scripts/build.sh --online <task>` allows the network.
+
+Everything is pinned in `gradle/libs.versions.toml`: AGP 8.5.2, Kotlin 2.1.0,
+Compose BOM 2024.12.01, Media3 1.4.1, min SDK 21, target SDK 34.
+
+## The release key
+
+The key that signs a published APK can never be replaced without breaking
+updates for everyone who already installed the app. It is created once, on the
+machine that will publish, and it never enters the repository:
+
+```bash
+export SOLUPLAY_KEYSTORE_PASSWORD='...'
+scripts/create-release-keystore.sh
+```
+
+The passphrase is read from the environment and handed to `keytool` through
+`:env`, so it never reaches a command line or a log. The script writes
+`keystore/release.jks` and `keystore.properties`, both gitignored.
+
+**Back the keystore up to two places off this machine, and keep the passphrase
+in a password manager.** Without both, no further update can ever be signed.
+
+## CI
+
+`.github/workflows/android.yml` runs on every push to `main` and on every pull
+request: unit tests, lint for both flavours, and the debug APKs, with the phone
+APK uploaded as a build artifact.
+
+Pushing a `v*` tag additionally builds the signed release APK and attaches it
+to a GitHub Release as `SoluPlay.apk`. That job needs four repository secrets,
+none of which exist yet:
+
+| Secret | Meaning |
+| --- | --- |
+| `KEYSTORE_BASE64` | The keystore file, base64 encoded |
+| `KEYSTORE_PASSWORD` | The keystore password |
+| `KEY_ALIAS` | The key alias |
+| `KEY_PASSWORD` | The key password |
+
+A manual release on your own machine stays supported, so a bad CI day cannot
+block a release.
 
 ## `latest.json`
 
