@@ -291,3 +291,140 @@ real box.
 with both launchers; the `tv` flavour is still the prepared split; the version
 pins, the two ABIs and the offline build gate are untouched.
 
+### Amendment 4 — 2026-11-04, Phase 1: the guide as the site actually publishes it
+
+Phase 1 reads the live site. On 2026-11-04 `/api/channels` answered with
+**167 channels** and `/api/fixtures` with **zero** matches, so the facts below
+are the ones the app was built against.
+
+**The seven rails are the site's own categories, not a list of ours.** The
+catalogue carries seven categories — Sports, Bangla, Indian, Pakistani,
+Documentary, Kids, Global — and the app reads them as seven rails. Their order
+is not written anywhere in the app: `priorityOrder` is global across the whole
+catalogue, so a rail's place is decided by the order the server published and
+nothing else. The app never re-ranks the guide.
+
+**A failed catalogue is not an empty catalogue.** A route that answers
+`success: false`, an empty channel list, or an unreachable site is a failure,
+never a guide. The app falls back in the order of trust — live site, then the
+copy this device saved under `filesDir`, then the copy baked into
+`app/src/main/assets/catalogue-channels.json` — and every screen says which
+copy it is showing.
+
+**The phone home is match strip, then pill row, then the rails.** Each rail is
+a 4-column grid of circular logos with the live dot, exactly the visual
+language of section 5. The pill row above the rails holds the categories and
+jumps to the rail it names. The match strip renders nothing at all while the
+board is empty, because an empty strip is worse than no strip.
+
+**The TV D-pad is handled by the screen, not by the focus chain.** Amendment 3
+left the arrows to Compose's own focus search. On a grid of seven rows that is
+not enough: left and right must stay inside one row and up and down must move
+between rows, and the refresh control in the top bar is a row of its own. The
+TV surface therefore reads the arrow keys itself and moves a `FocusRequester`
+to the right cell; every focusable item draws a focus ring, and OK opens the
+channel it is on. Type on the TV stays at 18 sp and above, as section 6 asks.
+
+**Logos are fetched by a small loader of our own.** No image library: the
+logos are fetched over plain HTTP, kept in memory for the life of the process,
+and a channel whose logo cannot be fetched still shows the first letter of its
+name.
+
+**Kick-off times are parsed by hand.** The board publishes `startsAt` as a
+string whose shape has changed before, and `java.time` needs API 26 while the
+app runs on API 21, so the clock is read with a regex and `Calendar`.
+
+**One command proves the live path.** The unit tests never touch the network;
+the live harness does, and only when it is asked for:
+
+```
+./gradlew test -Dsoluplay.live=1
+```
+
+It reads the real site through the app's own client and repository, and it
+proves the site-down path by pointing the client at an address that cannot
+answer.
+
+### Amendment 5 — 2026-11-04, Phase 1 correction pass: the findings of the read-only review
+
+A review of Phase 1 against the live contracts found two risks (R1, R2), five
+faults (F1–F5), one phone defect (N1), five TV defects (T1–T5) and two
+defects in the match clock (X1, X3). This amendment records what changed. The
+API contracts, the order of trust, the architecture and the scope fences are
+untouched; the changes are corrections, not new ground.
+
+**R2 — the baked catalogue carries no ladder.** The seed is the guide and
+nothing else: 167 channels, each with `_id`, `name`, `logo`, `category`,
+`isPinned`, `priorityOrder` and `tags`. `primaryStream` and
+`activeStreamCount` are removed by the generator, and the generator refuses to
+write a seed that carries `m3u8`, `token=` or `nimblesessionid` anywhere, or
+that carries an absolute address in any field other than `logo`. A baked
+upstream line is a stale credential inside the APK and inside the repository,
+so it is not there. The consequence is honest copy: the details card of a
+baked copy says that the mirror list comes from the site, not that no mirror
+is available. Playback asks the live API for the ladder it publishes.
+
+**R1 — the generator lives in this repository.** `scripts/make-seed.js` reads
+the public catalogue from `BASE_URL` and writes
+`app/src/main/assets/catalogue-channels.json`. It names no path outside this
+repository and no path on this PC.
+
+**F1–F5 — a failed guide is never an empty guide.**
+- *F1.* A board that could not be read leaves no board behind: the cached
+  board file is deleted instead of leaving a stale one behind, while a board
+  the site answered as empty is kept as an empty board.
+- *F2.* Each address is asked and each answer is read before it is accepted.
+  An address that answers with something that is not a guide is passed over
+  rather than believed.
+- *F3.* "The site could not be reached" and "the site answered with no list"
+  are now two different facts, not one. The transport says which, the snapshot
+  carries it, and the banner says it.
+- *F4.* A guide that is already on the screen is not relabelled live when a
+  refresh fails: what the viewer is looking at stays, and its badge says
+  cached.
+- *F5.* The live dot is gone. The catalogue publishes mirror counts, not
+  broadcast state, so a dot on every logo said something the site never said.
+  Amendment 4's phone description no longer stands on this point.
+
+**N1 — the pill jump lands clear of the pinned row.** The pill row is a sticky
+header, so a rail that landed flush with the top of the list hid its own title
+underneath it. The jump now carries a negative offset, because a positive
+offset is a *forward* scroll and would push the rail further up, under the
+header.
+
+**T1–T5 — the TV remote.**
+- *T1.* The details card is modal: the arrows went to the grid behind it. The
+  card takes them now, OK closes it, back closes it.
+- *T2.* A row that was off the window stayed off the window, because a
+  scrolling column does not follow the focus. The column is measured as it was
+  drawn and scrolled by the difference.
+- *T3.* The same, along a row: a tile off the right edge of its rail is
+  brought into the rail.
+- *T4.* A refresh rebuilt the grid and threw the focus away. The cell the
+  viewer was on is asked for again, and the first cell answers when that one
+  is gone.
+- *T5.* The top bar is a row of its own, and going back to it returns the
+  guide to its beginning.
+
+**X1 — the offset sign.** `-0530` was read as `+0530`, so a kick-off 5½ hours
+behind UTC was placed 5½ hours ahead. A `-` offset now subtracts.
+
+**X3 — the phase comes from the server.** The site computes the phase of a
+match — `upcoming`, `live`, `finished` — and the app reads it through a
+`BoardPhase` seam instead of deciding for itself. The countdown is used only
+for a match that has not started.
+
+**Still open.**
+
+- *X2.* The fixture fields `choices` and `watchPath` are modelled and unused.
+  They belong to the board's own cards and to playback, and Phase 1 neither
+  draws a choice nor opens a match.
+- *X4.* `/api/fixtures` answered with zero matches on 2026-11-04, so no
+  fixture card has been seen carrying real data. The match strip is proven by
+  unit tests against the shape the site publishes, not by a real board.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours, both release
+flavours compiled, 52 unit tests, no failures, and the three live-harness
+tests skipped because they only run when they are asked for
+(`./gradlew test -Dsoluplay.live=1`). Nothing was committed, pushed, released
+or deployed.

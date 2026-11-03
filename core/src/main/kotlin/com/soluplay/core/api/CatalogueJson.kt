@@ -53,3 +53,47 @@ object SoluPlayJson {
         explicitNulls = false
     }
 }
+
+/**
+ * What a body the routes answered with means.
+ *
+ * One decoder for the whole app: the client uses it to decide whether an
+ * address answered with something usable, and the repository uses it to decide
+ * what a body is worth. A body that cannot be read as a guide is never read as
+ * an empty guide.
+ */
+object CatalogueBody {
+
+    /**
+     * The channels a body carries, or null when it is not a usable catalogue.
+     *
+     * A route that failed and a route with no channels are the same thing
+     * here: not a guide.
+     */
+    fun channels(body: String?): List<Channel>? {
+        if (body.isNullOrBlank()) return null
+        val envelope = runCatching {
+            SoluPlayJson.json.decodeFromString(ChannelsEnvelope.serializer(), body)
+        }.getOrNull() ?: return null
+
+        if (!envelope.success) return null
+        if (envelope.channels.isEmpty()) return null
+        return envelope.channels
+    }
+
+    /**
+     * The fixtures a body carries, or null when the route failed.
+     *
+     * An empty list is a board with no matches on it — the board is empty
+     * most of the time — and that is a good answer, not a failure.
+     */
+    fun fixtures(body: String?): List<Fixture>? {
+        if (body.isNullOrBlank()) return null
+        val envelope = runCatching {
+            SoluPlayJson.json.decodeFromString(FixturesEnvelope.serializer(), body)
+        }.getOrNull() ?: return null
+
+        if (!envelope.success) return null
+        return envelope.fixtures
+    }
+}

@@ -15,6 +15,7 @@ decisions, with every later change appended as a numbered amendment.
 | `core/` | Shared code: API, models, the ladder, the player, the updater. |
 | `feature-phone/` | The handset UI. |
 | `feature-tv/` | The TV UI. It also ships inside the phone APK. |
+| `app/src/main/assets/catalogue-channels.json` | The guide baked into the APK — the last resort when the site cannot be reached. |
 | `scripts/` | The build helper and the release-key generator. |
 | `.github/workflows/android.yml` | CI: tests, lint, and the signed release. |
 | `latest.json` | The manifest. The single source of truth for the current version. |
@@ -50,6 +51,37 @@ portable toolchain on this machine; on another machine, set `JAVA_HOME` and
 
 Everything is pinned in `gradle/libs.versions.toml`: AGP 8.5.2, Kotlin 2.1.0,
 Compose BOM 2024.12.01, Media3 1.4.1, min SDK 21, target SDK 34.
+
+## Where the app is now
+
+| Phase | State |
+| --- | --- |
+| 0 — spec, skeleton, CI | Done. Both launchers, offline build, lint clean, unit tests green. |
+| 1 — browse | Done. The live catalogue, the match board, the phone grid, the TV focus grid, the offline cache and the site-down mode. |
+| 2 — playback | Not started. |
+
+Phase 1 reads the live site through the app's own client, falls back to the
+copy the device saved, and falls back again to the copy baked into the APK.
+Every screen says which of the three it is showing.
+
+**Reading the real site.** The unit tests never touch the network; the live
+harness does, and only when it is asked for:
+
+```bash
+./gradlew test -Dsoluplay.live=1
+```
+
+**Refreshing the baked catalogue.** The seed is the guide as it looked on the
+day the APK was packaged, so it is regenerated whenever the catalogue changes:
+
+```bash
+node scripts/make-seed.js
+```
+
+The seed carries the **guide only** — names, logos, categories and the order. The
+mirror ladder is left out on purpose: a baked upstream address is a stale credential
+in the APK and in the repository, and the app never plays from the seed. Playback
+asks the live API for the ladder the site publishes.
 
 ## The release key
 

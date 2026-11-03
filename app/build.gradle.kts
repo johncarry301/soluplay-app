@@ -117,6 +117,14 @@ android {
         abortOnError = false
     }
 
+    /**
+     * The live harness reaches the real site, so it only runs when it is asked
+     * for: `./gradlew test -Dsoluplay.live=1`.
+     */
+    tasks.withType<Test>().configureEach {
+        System.getProperty("soluplay.live")?.let { systemProperty("soluplay.live", it) }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -136,6 +144,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.foundation)
