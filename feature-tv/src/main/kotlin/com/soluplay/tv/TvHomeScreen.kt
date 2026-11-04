@@ -1,6 +1,7 @@
 package com.soluplay.tv
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -51,15 +52,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.soluplay.app.player.Media3PlaybackHost
+import com.soluplay.core.browse.BrowseSnapshot
 import com.soluplay.core.browse.BrowseViewModel
 import com.soluplay.core.browse.Rail
 import com.soluplay.core.browse.railsOf
+import com.soluplay.core.fixtures.FixtureTarget
+import com.soluplay.core.fixtures.fixtureTarget
+import com.soluplay.core.fixtures.playableChoices
 import com.soluplay.core.model.Channel
+import com.soluplay.core.model.Fixture
+import com.soluplay.core.model.FixtureChoice
+import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.ui.Accent
 import com.soluplay.core.ui.Background
-import com.soluplay.core.ui.ChannelDetailsCard
 import com.soluplay.core.ui.ChannelLogo
 import com.soluplay.core.ui.Copy
+import com.soluplay.core.ui.LogoPlate
 import com.soluplay.core.ui.MatchStrip
 import com.soluplay.core.ui.Muted
 import com.soluplay.core.ui.OutageBanner
@@ -68,16 +77,62 @@ import com.soluplay.core.ui.SourceBadge
 import com.soluplay.core.ui.outageMessage
 import kotlinx.coroutines.launch
 
+/** The channel the television is watching, if it is watching one. */
+private data class TvWatch(
+    val channelId: String,
+    val channelName: String,
+    val logoUrl: String,
+)
+
 /**
  * The TV is a different app from the phone, not a bigger one: rows, a focus
  * grid and the remote alone.
  *
  * The guide is never re-ranked here either — the rails and their order are the
- * server's.
+ * server's. A channel opens the watch screen, and a match opens the channel
+ * the board says it can be watched on.
  */
 @Composable
-fun TvHomeScreen(viewModel: BrowseViewModel) {
+fun TvHomeScreen(
+    viewModel: BrowseViewModel,
+    playback: PlaybackViewModel,
+    host: Media3PlaybackHost,
+) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
+
+    var watching by remember { mutableStateOf<TvWatch?>(null) }
+    var sheet by remember { mutableStateOf<Fixture?>(null) }
+
+    val onAir = watching
+    if (onAir != null) {
+        TvWatchScreen(
+            channelId = onAir.channelId,
+            channelName = onAir.channelName,
+            logoUrl = onAir.logoUrl,
+            host = host,
+            playback = playback,
+            onClose = { watching = null },
+        )
+    } else {
+        TvGuide(
+            snapshot = snapshot,
+            viewModel = viewModel,
+            sheet = sheet,
+            onSheet = { sheet = it },
+            onWatch = { watching = it },
+        )
+    }
+}
+
+/** The guide itself: the matches, the rails and the focus that walks them. */
+@Composable
+private fun TvGuide(
+    snapshot: BrowseSnapshot,
+    viewModel: BrowseViewModel,
+    sheet: Fixture?,
+    onSheet: (Fixture?) -> Unit,
+    onWatch: (TvWatch) -> Unit,
+) {
     val rails = remember(snapshot.channels) { railsOf(snapshot.channels) }
 
     val refreshRequester = remember { FocusRequester() }
@@ -85,7 +140,6 @@ fun TvHomeScreen(viewModel: BrowseViewModel) {
 
     var focusedRow by remember { mutableIntStateOf(1) }
     var focusedIndex by remember { mutableIntStateOf(0) }
-    var selected by remember { mutableStateOf<Channel?>(null) }
     val scope = rememberCoroutineScope()
 
     val verticalScroll = rememberScrollState()
@@ -150,7 +204,7 @@ fun TvHomeScreen(viewModel: BrowseViewModel) {
         return rails.getOrNull(row - 1)?.channels?.getOrNull(index)
     }
 
-    BackHandler(enabled = selected != null) { selected = null }
+    BackHandler(enabled = sheet != null) { onSheet(null) }
 
     Surface(color = Background, modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -163,9 +217,9 @@ fun TvHomeScreen(viewModel: BrowseViewModel) {
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
 
-                        // The details card is modal: the arrows belong to the
-                        // card until it is closed.
-                        val cardOpen = selected != null
+                        // The choice sheet is modal: the arrows belong to the
+                        // sheet until it is closed.
+                        val cardOpen = sheet != null
 
                         when (event.key) {
                             Key.DirectionRight -> {
@@ -186,11 +240,11 @@ fun TvHomeScreen(viewModel: BrowseViewModel) {
                             }
                             Key.Enter, Key.DirectionCenter, Key.NumPadEnter, Key.Spacebar -> {
                                 if (cardOpen) {
-                                    selected = null
+                                    onSheet(null)
                                 } else {
                                     val channel = channelAt(focusedRow, focusedIndex)
                                     if (channel != null) {
-                                        selected = channel
+                                        onWatch(TvWatch(channel.id, channel.name, channel.logo))
                                     } else {
                                         viewModel.refresh()
                                     }
@@ -240,7 +294,24 @@ fun TvHomeScreen(viewModel: BrowseViewModel) {
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                     )
-                    MatchStrip(fixtures = snapshot.fixtures, scale = 1.7f)
+                    MatchStrip(
+                        fixtures = snapshot.fixtures,
+                        scale = 1.7f,
+                        onPick = { fixture ->
+                            when (val target = fixtureTarget(fixture)) {
+                                is FixtureTarget.Open -> onWatch(
+                                    TvWatch(
+                                        channelId = target.choice.channelId,
+                                        channelName = target.choice.name,
+                                        logoUrl = target.choice.logoUrl,
+                                    ),
+                                )
+                                // More than one channel, or none that can be
+                                // opened: the sheet says which.
+                                else -> onSheet(fixture)
+                            }
+                        },
+                    )
                 }
 
                 rails.forEachIndexed { rowIndex, rail ->
@@ -261,25 +332,141 @@ fun TvHomeScreen(viewModel: BrowseViewModel) {
                 }
             }
 
-            val chosen = selected
-            if (chosen != null) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.65f)),
-                    )
-                    ChannelDetailsCard(
-                        channel = chosen,
-                        origin = snapshot.origin,
-                        titleSize = 22.sp,
-                        bodySize = 18.sp,
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(48.dp),
-                    )
+            val open = sheet
+            if (open != null) {
+                TvChoiceSheet(
+                    fixture = open,
+                    choices = playableChoices(open),
+                    onPick = { choice ->
+                        onSheet(null)
+                        onWatch(
+                            TvWatch(
+                                channelId = choice.channelId,
+                                channelName = choice.name,
+                                logoUrl = choice.logoUrl,
+                            ),
+                        )
+                    },
+                    onDismiss = { onSheet(null) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The channels a match card can be watched on.
+ *
+ * A card with one channel opens it, a card with several asks, and a card with
+ * none says so instead of opening nothing.
+ */
+@Composable
+private fun TvChoiceSheet(
+    fixture: Fixture,
+    choices: List<FixtureChoice>,
+    onPick: (FixtureChoice) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f)),
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .padding(horizontal = 120.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Panel)
+                .padding(32.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = fixture.title.ifBlank { fixture.competition },
+                color = Accent,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            if (choices.isEmpty()) {
+                Text(text = Copy.nothingToOpen(), color = Muted, fontSize = 20.sp)
+            } else {
+                Text(text = Copy.chooseChannel(), color = Muted, fontSize = 18.sp)
+                choices.forEach { choice ->
+                    TvChoiceRow(choice = choice, onPick = { onPick(choice) })
                 }
             }
+
+            Text(
+                text = Copy.close(),
+                color = Accent,
+                fontSize = 20.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Background)
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+            )
+        }
+    }
+}
+
+/** One channel on the choice sheet, walked with the remote. */
+@Composable
+private fun TvChoiceRow(choice: FixtureChoice, onPick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusable()
+            .onFocusChanged { focused = it.isFocused }
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                when (event.key) {
+                    Key.Enter, Key.DirectionCenter, Key.NumPadEnter, Key.Spacebar -> {
+                        onPick()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .clip(RoundedCornerShape(12.dp))
+            .border(2.dp, if (focused) Accent else Color.Transparent, RoundedCornerShape(12.dp))
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.size(56.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            LogoPlate(
+                url = choice.logoUrl,
+                fallbackText = choice.name,
+                size = 56.dp,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = choice.name,
+                color = Color.White,
+                fontSize = 22.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = choice.category,
+                color = Muted,
+                fontSize = 18.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -420,16 +607,11 @@ private fun TvChannelTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .clip(CircleShape)
-                .border(3.dp, if (focused) Accent else Color.Transparent, CircleShape)
-                .padding(if (focused) 6.dp else 3.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            ChannelLogo(channel = channel, size = 84.dp)
-        }
+        ChannelLogo(
+            channel = channel,
+            size = 96.dp,
+            border = if (focused) BorderStroke(3.dp, Accent) else null,
+        )
 
         Text(
             text = channel.name,

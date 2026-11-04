@@ -11,6 +11,14 @@ import java.io.IOException
 interface CatalogueSource {
     suspend fun channelsJson(): String
     suspend fun fixturesJson(): String
+
+    /**
+     * The channel and its mirror list, as the detail route publishes it.
+     *
+     * This is the only route that carries stream addresses, and the only one
+     * the player may use: the saved copy and the baked seed have no ladder.
+     */
+    suspend fun channelJson(id: String): String
 }
 
 /**
@@ -36,6 +44,9 @@ class CatalogueClient(
 
     override suspend fun fixturesJson(): String =
         read(ApiConfig.FIXTURES_PATH) { CatalogueBody.fixtures(it) != null }
+
+    override suspend fun channelJson(id: String): String =
+        read(ApiConfig.channelUrl(id)) { CatalogueBody.channel(it) != null }
 
     private suspend fun read(path: String, usable: (String) -> Boolean): String {
         if (addresses.isEmpty()) throw IOException("no base address is configured")

@@ -61,6 +61,7 @@ class CatalogueFallbackTest {
         private val fixtures: String? = null,
         private val channelsError: Exception? = null,
         private val fixturesError: Exception? = null,
+        private val channelDetail: String? = null,
     ) : CatalogueSource {
         override suspend fun channelsJson(): String {
             channelsError?.let { throw it }
@@ -71,6 +72,9 @@ class CatalogueFallbackTest {
             fixturesError?.let { throw it }
             return fixtures ?: throw IOException("no fixtures")
         }
+
+        override suspend fun channelJson(id: String): String =
+            channelDetail ?: throw IOException("no channel detail")
     }
 
     private class FakeCache(

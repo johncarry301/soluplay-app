@@ -104,7 +104,7 @@ android {
             java.srcDirs("../feature-phone/src/main/kotlin")
         }
         named("test") {
-            java.srcDirs("../core/src/test/kotlin")
+            java.srcDirs("../core/src/test/kotlin", "src/test/kotlin")
         }
     }
 
@@ -130,6 +130,16 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    /**
+     * The dependency metadata is a list of what went into the app, shipped so
+     * a viewer can read it. The app shows no such list and the file is
+     * measured in megabytes, so it is left out of the package.
+     */
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 }
 
 kotlin {
@@ -150,12 +160,10 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
-    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
-    implementation(libs.media3.ui)
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

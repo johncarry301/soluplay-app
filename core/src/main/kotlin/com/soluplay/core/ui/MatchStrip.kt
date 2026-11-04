@@ -1,18 +1,15 @@
 package com.soluplay.core.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,13 +35,15 @@ import kotlinx.coroutines.delay
  * strip — so it renders nothing at all when there is nothing on it.
  *
  * [scale] carries the surface's type size: the phone reads it at 1, the TV at
- * the size its own rule demands.
+ * the size its own rule demands. A card that can be opened says so by being
+ * tappable, and [onPick] is told which one was.
  */
 @Composable
 fun MatchStrip(
     fixtures: List<Fixture>,
     modifier: Modifier = Modifier,
     scale: Float = 1f,
+    onPick: (Fixture) -> Unit = {},
 ) {
     if (fixtures.isEmpty()) return
 
@@ -60,7 +59,12 @@ fun MatchStrip(
         horizontalArrangement = Arrangement.spacedBy((10 * scale).dp),
     ) {
         fixtures.forEach { fixture ->
-            MatchCard(fixture = fixture, nowMillis = now, scale = scale)
+            MatchCard(
+                fixture = fixture,
+                nowMillis = now,
+                scale = scale,
+                onClick = { onPick(fixture) },
+            )
         }
     }
 }
@@ -70,12 +74,14 @@ private fun MatchCard(
     fixture: Fixture,
     nowMillis: Long,
     scale: Float,
+    onClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .width((196 * scale).dp)
             .clip(RoundedCornerShape(14.dp))
             .background(Panel)
+            .clickable { onClick() }
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -136,20 +142,11 @@ private fun Team(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size((30 * scale).dp)
-                .clip(CircleShape)
-                .background(Background),
-            contentAlignment = Alignment.Center,
-        ) {
-            LogoImage(
-                url = logoUrl,
-                fallbackText = name,
-                size = (30 * scale).dp,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        LogoPlate(
+            url = logoUrl,
+            fallbackText = name,
+            size = (30 * scale).dp,
+        )
         Text(
             text = name,
             color = Muted,

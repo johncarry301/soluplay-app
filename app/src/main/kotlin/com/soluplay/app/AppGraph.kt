@@ -7,6 +7,7 @@ import com.soluplay.core.browse.CatalogueRepository
 import com.soluplay.core.browse.SeedCatalogue
 import com.soluplay.core.browse.SeedProvider
 import com.soluplay.core.cache.FileCatalogueCache
+import com.soluplay.core.ui.LogoLoader
 import java.io.File
 
 /**
@@ -23,11 +24,25 @@ object AppGraph {
     /** Where the last good copy is kept on the device. */
     const val CACHE_DIRECTORY = "catalogue"
 
+    /** Where the copies of the channel logos are kept. */
+    const val LOGO_CACHE_DIRECTORY = "logos"
+
     fun repository(context: Context): CatalogueRepository = CatalogueRepository(
         source = CatalogueClient(),
         cache = FileCatalogueCache(File(context.filesDir, CACHE_DIRECTORY)),
         seed = AssetsSeedProvider(context.assets, SEED_FILE),
     )
+
+    /**
+     * The things that have to be set up once per run.
+     *
+     * The logos are the only thing the app fetches for every channel it shows,
+     * so their copies are kept on the device: the second run of the app does
+     * not ask the network for them again.
+     */
+    fun prepare(context: Context) {
+        LogoLoader.useDiskCache(File(context.cacheDir, LOGO_CACHE_DIRECTORY))
+    }
 }
 
 /** The catalogue that was baked into the APK. */

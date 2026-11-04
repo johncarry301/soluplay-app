@@ -44,7 +44,7 @@ class UnusableAnswerException(message: String) : SiteAnsweredException(message)
 class UrlConnectionTransport(
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 12_000,
-) : HttpTransport {
+) : HttpTransport, JsonPoster {
 
     override suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         val connection = URL(url).openConnection() as HttpURLConnection
@@ -61,6 +61,35 @@ class UrlConnectionTransport(
 
             if (status !in 200..299) throw HttpStatusException(status, body)
             body
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /**
+     * The one body the app posts to the site.
+     *
+     * The site's resolver is asked which video a channel is showing; nothing
+     * else is posted, and no credential is ever attached.
+     */
+    override suspend fun postJson(url: String, body: String): String = withContext(Dispatchers.IO) {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.connectTimeout = connectTimeoutMs
+            connection.readTimeout = readTimeoutMs
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("User-Agent", USER_AGENT)
+            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+
+            if (status !in 200..299) throw HttpStatusException(status, text)
+            text
         } finally {
             connection.disconnect()
         }

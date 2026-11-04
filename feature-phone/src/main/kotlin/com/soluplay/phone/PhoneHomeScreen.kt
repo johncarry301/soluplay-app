@@ -1,5 +1,6 @@
 package com.soluplay.phone
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,10 +13,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,18 +41,28 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.soluplay.app.player.Media3PlaybackHost
 import com.soluplay.core.browse.BrowseViewModel
 import com.soluplay.core.browse.CatalogueOrigin
+import com.soluplay.core.browse.GuideItem
 import com.soluplay.core.browse.Rail
+import com.soluplay.core.browse.guideItemsOf
+import com.soluplay.core.browse.railHeadingsOf
 import com.soluplay.core.browse.railsOf
+import com.soluplay.core.fixtures.FixtureTarget
+import com.soluplay.core.fixtures.fixtureTarget
+import com.soluplay.core.fixtures.playableChoices
 import com.soluplay.core.model.Channel
-import com.soluplay.core.ui.ChannelDetailsCard
+import com.soluplay.core.model.Fixture
+import com.soluplay.core.model.FixtureChoice
 import com.soluplay.core.ui.ChannelLogo
 import com.soluplay.core.ui.Copy
+import com.soluplay.core.ui.LogoPlate
 import com.soluplay.core.ui.MatchStrip
 import com.soluplay.core.ui.OutageBanner
 import com.soluplay.core.ui.SourceBadge
 import com.soluplay.core.ui.outageMessage
+import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.ui.Background
 import com.soluplay.core.ui.Muted
 import com.soluplay.core.ui.Panel
@@ -59,19 +71,41 @@ import kotlinx.coroutines.launch
 
 private const val COLUMNS = 4
 
+/** The gaps the guide's list keeps between its parts. */
+private val GAP_RAIL = 10.dp
+private val GAP_ROW = 12.dp
+private val GAP_SECTION = 18.dp
+
+/** Where the phone is: the guide, or a channel being watched. */
+private sealed interface PhoneRoute {
+    data object Home : PhoneRoute
+    data class Watch(
+        val channelId: String,
+        val channelName: String,
+        val logoUrl: String,
+    ) : PhoneRoute
+}
+
 /**
  * The phone home surface: the matches, then the rails, then the logo grid.
  *
  * The guide is the server's order and is never re-ranked here; a rail is
- * simply the channels the server filed under one category.
+ * simply the channels the server filed under one category. A channel opens the
+ * watch screen, and a match opens the channel the board says it can be
+ * watched on.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PhoneHomeScreen(viewModel: BrowseViewModel) {
+fun PhoneHomeScreen(
+    viewModel: BrowseViewModel,
+    playback: PlaybackViewModel,
+    host: Media3PlaybackHost,
+) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val rails = remember(snapshot.channels) { railsOf(snapshot.channels) }
 
-    var selected by remember { mutableStateOf<Channel?>(null) }
+    var route by remember { mutableStateOf<PhoneRoute>(PhoneRoute.Home) }
+    var sheet by remember { mutableStateOf<Fixture?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var pillHeight by remember { mutableIntStateOf(0) }
@@ -79,6 +113,31 @@ fun PhoneHomeScreen(viewModel: BrowseViewModel) {
     val hasStrip = snapshot.fixtures.isNotEmpty()
     val hasPills = rails.isNotEmpty()
     val leadingItems = (if (hasStrip) 1 else 0) + (if (hasPills) 1 else 0)
+
+    // The guide's list is a flat one, so the list draws only what is on the
+    // screen: a heading, and a row of channels at a time.
+    val guideItems = remember(rails) { guideItemsOf(rails, COLUMNS) }
+
+    // Where the heading of each rail sits in that list, so a pill can jump to
+    // the rail it names.
+    val railHeadings = remember(rails) { railHeadingsOf(rails, COLUMNS) }
+
+    val watching = route as? PhoneRoute.Watch
+    if (watching != null) {
+        PhoneWatchScreen(
+            channelId = watching.channelId,
+            channelName = watching.channelName,
+            logoUrl = watching.logoUrl,
+            host = host,
+            playback = playback,
+            onClose = { route = PhoneRoute.Home },
+        )
+        return
+    }
+
+    // Back puts the choice sheet away before it leaves the screen, the same
+    // way the sheet's own button does.
+    BackHandler(enabled = sheet != null) { sheet = null }
 
     Surface(color = Background, modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -99,12 +158,15 @@ fun PhoneHomeScreen(viewModel: BrowseViewModel) {
                 LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
                 ) {
                     if (hasStrip) {
                         item(key = "matches") {
                             Column(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    bottom = GAP_SECTION,
+                                ),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text(
@@ -113,7 +175,21 @@ fun PhoneHomeScreen(viewModel: BrowseViewModel) {
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                 )
-                                MatchStrip(fixtures = snapshot.fixtures)
+                                MatchStrip(
+                                    fixtures = snapshot.fixtures,
+                                    onPick = { fixture ->
+                                        when (val target = fixtureTarget(fixture)) {
+                                            is FixtureTarget.Open -> route = PhoneRoute.Watch(
+                                                channelId = target.choice.channelId,
+                                                channelName = target.choice.name,
+                                                logoUrl = target.choice.logoUrl,
+                                            )
+                                            // More than one channel, or none that
+                                            // can be opened: the sheet says which.
+                                            else -> sheet = fixture
+                                        }
+                                    },
+                                )
                             }
                         }
                     }
@@ -130,18 +206,38 @@ fun PhoneHomeScreen(viewModel: BrowseViewModel) {
                                         // A negative offset puts the rail below
                                         // the pill row instead.
                                         listState.animateScrollToItem(
-                                            index = leadingItems + index,
+                                            index = leadingItems +
+                                                railHeadings.getOrElse(index) { 0 },
                                             scrollOffset = -pillHeight,
                                         )
                                     }
                                 },
-                                modifier = Modifier.onSizeChanged { pillHeight = it.height },
+                                modifier = Modifier
+                                    .onSizeChanged { pillHeight = it.height }
+                                    .padding(bottom = GAP_SECTION),
                             )
                         }
                     }
 
-                    itemsIndexed(rails, key = { _, rail -> rail.name }) { _, rail ->
-                        RailSection(rail = rail, onPick = { selected = it })
+                    items(guideItems, key = { it.key }) { item ->
+                        when (item) {
+                            is GuideItem.Heading -> RailHeading(
+                                name = item.name,
+                                count = item.count,
+                            )
+
+                            is GuideItem.Row -> ChannelRow(
+                                channels = item.channels,
+                                last = item.last,
+                                onPick = { channel ->
+                                    route = PhoneRoute.Watch(
+                                        channelId = channel.id,
+                                        channelName = channel.name,
+                                        logoUrl = channel.logo,
+                                    )
+                                },
+                            )
+                        }
                     }
 
                     if (!hasPills) {
@@ -160,24 +256,130 @@ fun PhoneHomeScreen(viewModel: BrowseViewModel) {
                 }
             }
 
-            val chosen = selected
-            if (chosen != null) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Box(
+            val open = sheet
+            if (open != null) {
+                ChoiceSheet(
+                    fixture = open,
+                    choices = playableChoices(open),
+                    onPick = { choice ->
+                        sheet = null
+                        route = PhoneRoute.Watch(
+                            channelId = choice.channelId,
+                            channelName = choice.name,
+                            logoUrl = choice.logoUrl,
+                        )
+                    },
+                    onDismiss = { sheet = null },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The channels a match card can be watched on.
+ *
+ * A card with one channel opens it, a card with several asks, and a card with
+ * none says so instead of opening nothing.
+ */
+@Composable
+private fun ChoiceSheet(
+    fixture: Fixture,
+    choices: List<FixtureChoice>,
+    onPick: (FixtureChoice) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.65f))
+                .clickable { onDismiss() },
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(Panel)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = fixture.title.ifBlank { fixture.competition },
+                color = Accent,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            if (choices.isEmpty()) {
+                Text(
+                    text = Copy.nothingToOpen(),
+                    color = Muted,
+                    fontSize = 13.sp,
+                )
+            } else {
+                Text(
+                    text = Copy.chooseChannel(),
+                    color = Muted,
+                    fontSize = 12.sp,
+                )
+                choices.forEach { choice ->
+                    Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.65f))
-                            .clickable { selected = null },
-                    )
-                    ChannelDetailsCard(
-                        channel = chosen,
-                        origin = snapshot.origin,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                    )
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onPick(choice) }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(40.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            LogoPlate(
+                                url = choice.logoUrl,
+                                fallbackText = choice.name,
+                                size = 40.dp,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = choice.name,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = choice.category,
+                                color = Muted,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
+
+            Text(
+                text = Copy.close(),
+                color = Accent,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Background)
+                    .clickable { onDismiss() }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
         }
     }
 }
@@ -244,51 +446,45 @@ private fun PillRow(
 }
 
 @Composable
-private fun RailSection(
-    rail: Rail,
-    onPick: (Channel) -> Unit,
-) {
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+private fun RailHeading(name: String, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = GAP_RAIL),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = rail.name,
-                color = Accent,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = rail.channels.size.toString(), color = Muted, fontSize = 12.sp)
-        }
-
-        ChannelGrid(channels = rail.channels, onPick = onPick)
+        Text(
+            text = name,
+            color = Accent,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = count.toString(), color = Muted, fontSize = 12.sp)
     }
 }
 
 @Composable
-private fun ChannelGrid(
+private fun ChannelRow(
     channels: List<Channel>,
+    last: Boolean,
     onPick: (Channel) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        channels.chunked(COLUMNS).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                row.forEach { channel ->
-                    ChannelTile(
-                        channel = channel,
-                        onPick = { onPick(channel) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                repeat(COLUMNS - row.size) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = if (last) GAP_SECTION else GAP_ROW),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        channels.forEach { channel ->
+            ChannelTile(
+                channel = channel,
+                onPick = { onPick(channel) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        repeat(COLUMNS - channels.size) {
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }

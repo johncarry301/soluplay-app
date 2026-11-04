@@ -58,12 +58,41 @@ object Copy {
 
     @Composable fun noMirror() = text("এখন কোনো মিরর নেই", "No mirror available")
 
-    @Composable fun mirrorsUnknown() = text(
-        "মিররের তালিকা সাইট থেকে আসে",
-        "The mirror list comes from the site",
+    @Composable fun loadingLadder() = text(
+        "চ্যানেলের মিরর তালিকা আসছে…",
+        "The channel's mirror list is coming…",
     )
 
-    @Composable fun playbackLater() = text("প্লেব্যাক আসছে Phase 2-এ", "Playback arrives in Phase 2")
+    @Composable fun tuning(mirror: Int, of: Int) = text(
+        "মিরর $mirror টিউন হচ্ছে ($of টির মধ্যে)…",
+        "Tuning mirror $mirror of $of…",
+    )
+
+    @Composable fun racing(count: Int) = text(
+        "একসাথে $count টি মিরর চেষ্টা হচ্ছে…",
+        "Trying $count mirrors at once…",
+    )
+
+    @Composable fun recovering() = text("ছবি ফিরে আসছে…", "Waiting for the picture…")
+
+    @Composable fun exhausted() = text(
+        "কোনো মিরর থেকে ছবি আসছে না।",
+        "No mirror is sending a picture.",
+    )
+
+    @Composable fun ladderUnreadable() = text(
+        "চ্যানেলের তথ্য আনা যায়নি।",
+        "The channel's details could not be read.",
+    )
+
+    @Composable fun back() = text("ফিরে যান", "Back")
+
+    @Composable fun chooseChannel() = text("চ্যানেল বেছে নিন", "Choose a channel")
+
+    @Composable fun nothingToOpen() = text(
+        "এই ম্যাচটি এখান থেকে খোলা যাচ্ছে না।",
+        "This match cannot be opened from here.",
+    )
 
     @Composable fun close() = text("বন্ধ", "Close")
 }

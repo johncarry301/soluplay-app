@@ -428,3 +428,637 @@ flavours compiled, 52 unit tests, no failures, and the three live-harness
 tests skipped because they only run when they are asked for
 (`./gradlew test -Dsoluplay.live=1`). Nothing was committed, pushed, released
 or deployed.
+
+### Amendment 6 — 2026-11-04, Phase 2: playback, the ladder walk, and the match cards
+
+Phase 2 is: Media3 playback, server-priority mirror selection, automatic
+failover, first-frame timeout, frozen-playback detection, and fixture-to-native-channel
+navigation. The stream addresses come from the live API only. The baked seed is
+never used for playback. The FreeTV / web-player / Direct HLS code is untouched.
+
+**The machine is one small class, and it holds no player.** `PlaybackMachine`
+knows three things: which mirror is being tried, whether that mirror has proved
+a picture, and whether the picture is still moving. It has no clock of its own
+(the time comes from an injected `now`) and no player of its own, so the whole
+ladder — every failure, every deadline, every hop — is exercised on the JVM
+with no device, no decoder and no network. `core/` therefore carries no Media3
+dependency at all: the ExoPlayer wrapper and the `PlayerView` live in
+`app/src/main/kotlin/com/soluplay/app/player/`, and `core/player/PlaybackHost.kt`
+is the seam between the two.
+
+**The deadlines are the web player's own.** `FIRST_FRAME_DEADLINE_MS = 10_000`
+and `STALL_GRACE_MS = 1_200` — the two numbers `components/players/DirectHlsPlayer.tsx`
+uses — so the app gives a mirror up at the same moment the site does, and for the
+same reasons.
+
+- A mirror being tuned has ten seconds to prove a picture. No picture by then
+  and the mirror is given up for the next one in the published order. The app
+  never shows a black screen and calls it tuning forever.
+- A picture that was up and then stops: the frozen frame stays on the screen
+  through 1.2 s of grace, and if the player's clock moves again the picture is
+  alive and nothing happens.
+- A picture still frozen after the grace gets one more full ten-second budget
+  **on the same mirror**, because a freeze is often the feed's own hiccup and
+  that mirror recovers. Only when that second budget also expires is the mirror
+  given up, and the next one is tried.
+
+**The ladder is the server's order and is never re-ranked.**
+`core/ladder/Ladder.kt` offers exactly one operation — "give me the next
+mirror" — and no way to sort. The app never chooses a mirror by latency, by
+failed-attempt count or by anything of its own, and there is no manual
+"Server N" control on either surface.
+
+**The ladder is read live, from the site, and from nowhere else.**
+`CatalogueRepository.liveChannelDetail(id)` calls `GET /api/channels/<id>` and
+returns the published `streams[]` in the order the server ranked them. It has
+no cache fallback and no seed fallback, deliberately: the guide may fall back
+to the copy on the device or the copy baked into the APK, and the ladder may
+not. A stale ladder walks a viewer into a link that died days ago, and the baked
+copy carries no stream addresses at all. `LiveLadderTest` proves both halves of
+that rule.
+
+**A late answer is dropped.** The view model carries an `opening` token, so an
+answer that arrives after the viewer has moved to another channel is not played.
+
+**Exhaustion is a state, not a spinner.** When every published mirror has been
+tried, the screen says so in one line and says which reason gave the last
+mirror up: no picture, frozen, player error, or no mirror at all. The
+weak-signal panel sits inside the frame the picture occupies, so a dead feed
+never becomes a separate screen.
+
+**A match card now opens a native channel.** `core/fixtures/BoardChoices.kt`
+reads the board's own `choices[]`: a card with one openable choice opens it, a
+card with several asks which one, and a card with none says it cannot be
+watched from here instead of opening nothing. Only a choice the board marks
+`ready` **and** that names a direct channel is openable — the secured tier is
+not in Phase 2.
+
+**What is on the screen while it plays.** The picture is the screen. A tap
+brings the words in and out and never pauses the feed. The bottom line carries
+the channel name, what the app is doing (the mirror list is coming / tuning
+mirror 2 of 3 / live / waiting for the picture) and which mirror is playing.
+The TV surface is the same at TV type sizes, with the back control focusable and
+on the D-pad.
+
+**Deliberately not built in Phase 2.**
+
+- The PLAN section 5 gesture set — swipe to change channel, double-tap
+  fullscreen, two-finger pause, horizontal swipe to the next mirror. The
+  horizontal mirror swipe is excluded on purpose: a manual mirror control
+  contradicts the "no manual server button" fence in section 3. Tap-to-reveal-controls
+  is built, because it is in the plan and it does not touch the ladder.
+- The YouTube path of section 4 (resolve → WebView + IFrame API).
+  `YouTubeResolveEnvelope` exists in the model but no client method calls it
+  yet. A mirror that is a YouTube page rather than a media URL fails in Media3
+  and the machine hops to the next mirror — the honest outcome, but not the
+  YouTube path.
+- The player features of section 4 that need a UI of their own: aspect-ratio
+  control, subtitles, audio-track selection, HD/SD toggle, PiP, background
+  audio, the stats overlay. The `PlayerView` is `useController = false`, so no
+  Media3 controller chrome is on the screen.
+- TLS repair (section 4's `ProviderTls`), the update system (section 7), and
+  every phase after this one.
+
+**Still open.**
+
+- *X2.* The fixture `watchPath` fields are modelled and are still not what
+  navigates. The app opens a channel by its `channelId`;
+  `FixtureChoice.watchPath` and `Fixture.watchPath` are web routes and are
+  read but not acted on. That is a deliberate choice — the app opens the
+  channel itself, so a web route is not what decides — but it is unproven
+  against the board's own rules: a card whose only openable choice is
+  `delisted` or `secured` is refused, and the board's own `watchPath` might
+  have said otherwise.
+- *X4.* `/api/fixtures` answered with zero matches on 2026-11-04, so no match
+  card has been seen carrying real data. The card→channel navigation is proven
+  by unit tests against the shape the site publishes, not by a real board.
+- *No physical device.* Nothing in Phase 2 has run on a phone or a box. The
+  decoder path, the first frame on real hardware, the failover onto a second
+  mirror, the D-pad focus and the ten-second deadline are all unproven in the
+  only way that counts.
+- *The TV corner preview* of section 6 is not built: browsing the grid plays
+  nothing.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours and both release
+flavours compiled, 72 unit tests, no failures, and the three live-harness
+tests skipped because they only run when they are asked for
+(`./gradlew test -Dsoluplay.live=1`). Twenty of the 72 are new in Phase 2 —
+twelve for the playback machine, six for the fixture choices, two for the live
+ladder. Nothing was committed, pushed, released or deployed, and `latest.json`
+stays unpublished until a real `SoluPlay.apk` asset exists in GitHub Releases.
+
+### Amendment 7 — 2026-11-04, Phase 2 correction pass: the guards, and the second chance
+
+A read-only audit of Phase 2 raised eleven findings. Four of them are fixed
+here, one is aligned with the web player, two are recorded as decisions, and
+the rest are left alone on purpose.
+
+**F1 — a stale player event can no longer change what is on screen.** Every
+try at playing now has a number. `PlaybackCommand.Prepare` carries it, the
+host puts it on every answer it reports, and the machine ignores any answer
+whose number is not the one it is waiting for. A picture, a stall, a recovery
+or an error from a mirror the walk has already left therefore changes
+nothing: it cannot mark a new mirror live, and it cannot disarm the
+ten-second deadline. The number is carried in the core, so the guard can be
+tested without a device.
+
+**F1, at the player.** Each try at playing also gets its own listener on the
+player, and the listener of the try that is over is taken off before the next
+one goes on. The answer of a mirror the walk has left has nowhere to go.
+
+**F2 — the listener that was put on is the one that comes off.** The host
+holds the listener it registered and removes that instance when it releases
+the player. The old code built a second listener to remove, which removed
+nothing.
+
+**F8 — a ladder for a channel the viewer has left is refused.** The machine
+now owns a session number. Opening a channel begins one, the ladder has to be
+handed back with the session it belongs to, and a ladder that arrives late —
+or after the watch screen was closed — is refused instead of played. The
+view model's old `opening` token is gone; the machine's session is the one
+guard.
+
+**F10 — Back puts the phone's choice sheet away first.** The sheet is closed
+by Back before the screen is left, the same way the TV surface already does
+it and the same way the sheet's own button does.
+
+**F4 — a temporary failure is given a second chance, as on the web.** The web
+player re-reads the manifest of the same mirror before it gives that mirror
+up, so a healthy mirror is not retired over a hiccup. The app does the same:
+a network failure re-tries the same published address, up to the web's own
+two re-reads, and only then does the walk move to the next published mirror.
+A failure that is not a network failure means the mirror itself is broken and
+the walk moves on at once. The ladder is never re-ranked — the mirror that is
+tried again is the one the server published in this place.
+
+*Intentional differences from the web player, and why.*
+
+- The web's last resort is an in-place recovery window of three seconds after
+  the re-reads are used up. The app uses the same three seconds, but
+  re-prepares the mirror to get there, because Media3 cannot resume a load
+  that has already failed. The window is never allowed to run past the budget
+  the mirror was already given, so the mirror is given up at the earlier of
+  the two — which is the web's own rule.
+- The web recovers a media error in place, with no cap and no counter. Media3
+  has no equivalent that is worth the risk of re-preparing a decoder that has
+  already failed, so anything that is not a network failure moves the walk on
+  at once. This is the one place where the app is stricter than the site.
+- The web's recovery of a feed that was already on air has no deadline at
+  all. The app gives the mirror the same ten seconds a first frame gets, so a
+  broken feed cannot sit on the screen for ever.
+
+**F5 — the signed headers are still to come.** The app sends no provider
+`Referer` or `Origin` of its own, and none is invented here. The web player
+sends what the card publishes; the app will do the same once the signed
+header work lands, and until then a mirror that needs a header is a mirror
+that fails. That work is planned, not started.
+
+**F3 — audio-only streams are out of scope by decision.** The app is for
+video: live TV, sports, films and video streaming services. Radio and
+audio-only streams are permanently out of scope, so no audio-only detection
+is built and the video first frame stays the signal that a mirror has proved
+itself.
+
+**What was not touched.** The published ladder order, the live-only ladder
+loading, the saved copy and the baked seed (neither carries a stream address
+and neither is on the playback path), the FreeTV repository, the Direct HLS
+panel, the web player and the eighteen protected paths. No provider header
+was invented, and no feature outside this list was started.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours and both
+release flavours compiled, 84 unit tests, no failures, and the three
+live-harness tests skipped because they only run when they are asked for
+(`./gradlew test -Dsoluplay.live=1`). Twelve of the 84 are new in this pass,
+and all twelve are about the guards: a late picture, a late error and a late
+stall from a try that is over, a ladder from a session that is over, a ladder
+that arrives after the channel was closed, the number of each try at playing,
+the two second chances, the three-second window, and the two ways a broken
+mirror is given up.
+
+**Still open.**
+
+- *No physical device.* The correction pass has not run on a phone or a box.
+  What still needs the real thing: that a real network failure is reported
+  as a network failure and not as a broken mirror (the fault is read from the
+  player's error code, and only the player can tell the two apart); that the
+  second chance on a real failing mirror behaves as the tests say; that Back
+  closes the sheet on a real handset; and that the listener really is the one
+  that is removed, seen from the player's own state.
+- *X2 and X4* are unchanged: the fixture `watchPath` fields are still read
+  and not acted on, and no match card has yet been seen carrying real data.
+- *The TV corner preview* of section 6 is still not built.
+- `latest.json` stays unpublished until a real `SoluPlay.apk` asset exists in
+  GitHub Releases.
+
+Nothing in this pass was committed, pushed, released or deployed, and no
+keystore was touched. The working tree holds the changes for review.
+
+### Amendment 8 — 2026-11-04, Phase 2: the race — parallel stream startup
+
+The mirrors of a channel are raced now, not walked one at a time.
+
+**What the app does.** When a channel is opened and the site publishes its
+ladder, the first three published mirrors are tuned together, each by a player
+of its own. The first of them to put a picture on the screen keeps it, and the
+ones that lost are let go of at once — decoder, buffer and surface together.
+The walk moves on to the next published mirrors only when the whole batch has
+failed, in batches of up to three, and the mirrors that are left are tried
+together when fewer than three are left. The published order is never
+changed: the race only decides how many of the published mirrors are in
+flight at the same moment.
+
+**The numbers are the web's own.** The ten-second first-frame deadline, the
+1.2-second stall grace, the two re-reads of a failing mirror and the
+three-second recovery window are all unchanged. A mirror that *fails* is given
+up after them, exactly as before. A mirror that merely *loses a race* is not,
+because a mirror that was slower is not a broken mirror.
+
+**A losing mirror is not thrown away.** It keeps its place in the published
+order and is raced again if the picture on the screen dies, so the failover the
+web player does is still there: the walk continues with the mirrors published
+next, in the order the site published them.
+
+**Three players, and the one that wins.** The host now holds a player per try
+at playing and a surface per player — a Media3 player only reports a rendered
+first frame when it has a real surface attached, so a race needs one view per
+mirror inside the stage. The winner's view is brought to the front; the
+losers' views are taken out of the stage and their players are released.
+
+**No stale callbacks, no competing players.** The attempt number of
+Amendment 7 does this work too: the losers are removed from the machine's
+list of mirrors in flight the moment the winner is chosen, so a picture that
+arrives late from a loser is ignored. The listener of a loser is taken off its
+player and the player is released before anything else is put on, so a loser
+cannot say anything afterwards at all.
+
+**The screen tells the truth.** While more than one mirror is being tried the
+status says how many ("Trying 3 mirrors at once…") instead of claiming that
+one mirror is being tuned.
+
+**What was not touched.** The server-provided order of the URLs, the FreeTV
+web player, the site's APIs and the backend, the published ladder order, the
+live-only ladder loading, and the eighteen protected paths. Nothing outside
+the Android app was changed.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours built, 94 unit
+tests, no failures, and the three live-harness tests skipped because they only
+run when they are asked for. Ten of the 94 are new in this pass and all ten
+are about the race: the first three mirrors tuned together, the winner keeping
+the picture, the losers being let go of at once, the batch moving on to the
+next three, the mirrors that are left being tried together, the walk ending
+when no mirror is left, a broken mirror leaving the race, and the mirrors that
+lost being raced again when the picture dies.
+
+**Still open.**
+
+- *No physical device.* The race has not run on a phone or a box. What still
+  needs the real thing: that three decoders at once do not upset a cheap
+  handset; that the first picture really is the one that is kept; that the
+  losers' players really are released; and that the stage shows one picture
+  and not three.
+- *The race size of three is a judgement, not a measurement.* It is the
+  number that was asked for, and it has not been tried against a real device
+  under load.
+- *X2 and X4* are unchanged, the TV corner preview is still not built, and
+  `latest.json` stays unpublished until a real `SoluPlay.apk` asset exists in
+  GitHub Releases.
+
+Nothing in this pass was committed, pushed, released or deployed, and no
+keystore was touched. The working tree holds the changes for review.
+
+### Amendment 9 — 2026-11-04, Phase 2 correction pass: the four findings from the Galaxy A21
+
+The first APK was put on a real phone, and four things were wrong with it. This
+amendment records what each of them actually was, what was changed, and what
+still needs the real thing to be proved.
+
+#### 1. The logos were clipped and the plates did not match
+
+**What was wrong.** The logo was drawn inside a circle and scaled to fill it,
+so a wordmark wider than it was tall was cut off at the sides and a square
+logo lost its corners. A logo that could not be fetched was replaced by a
+letter cut out of the middle of the name, so a name that begins with a
+character written in two pieces showed half a letter.
+
+**What it is now.** Every logo stands on the same plate: the same background,
+the same rounded shape, the same room inside it. The logo itself is fitted
+rather than cropped — what was published is shown whole, in the shape it was
+published in. A logo that cannot be fetched is replaced by the first letter of
+the channel's name, taken whole.
+
+**The name and the category.** The category the site filed a channel under is
+now carried from the channel detail into the playback state, and it is shown
+under the channel name on the phone and on the television.
+
+#### 2. The app lagged
+
+**What was wrong.** Two things, and both of them were in the guide.
+
+The logos were fetched at the size they were published at and kept at that
+size in memory, forever, with no limit on how many were fetched at the same
+time and nothing kept on the device between runs. The guide was drawn a whole
+rail at a time — one list item per rail — so every channel of a rail was
+composed and every logo of a rail was fetched the moment the rail came on the
+screen, however long that rail was.
+
+**What it is now.** A logo is decoded no larger than it is ever drawn (320 px
+on the long edge), at most four are fetched at the same time, a logo that is
+being fetched is never fetched twice, the ones kept in memory are bounded and
+the oldest are let go of first, and a copy is kept in the app's own cache so
+the next run does not ask the network for it again.
+
+The guide is now a flat list: a heading, then one row of four channels at a
+time. The list draws only the rows that are on the screen, so a rail of forty
+channels fetches four logos at a time and not forty. The pill that jumps to a
+rail still works, and the order is still the server's.
+
+#### 3. The package was bigger than it needed to be
+
+**What was wrong.** Nothing was broken, but two dependencies were carried for
+nothing: `compose.ui.tooling.preview` (the preview tooling, which the app
+never uses) and `media3-ui` (the `PlayerView`, which the app never uses — the
+picture is drawn on a `TextureView` of its own, so that the winning mirror of
+a race can be brought in front of the others). The dependency metadata was
+also being packaged, and the app shows no list of what went into it.
+
+**What it is now.** Those two dependencies are gone, the dependency metadata is
+no longer packaged, and nothing else was touched: Media3 is whole, both ABIs
+are still built, and no supported video format was dropped.
+
+**The numbers.** The phone debug package went from 12,646,014 bytes to
+12,326,772 bytes — 319 KB smaller, and that is with the WebView YouTube player
+added in this same pass. The television debug package is 12,273,616 bytes.
+
+**The number that matters is not this one.** The 12 MB that was measured is the
+*debug* package, and it is mostly unminified dex: `classes.dex` alone is
+16.9 MB and `classes13.dex` 11.2 MB before compression. The release variant
+already has R8 and resource shrinking turned on, so the shipping package is a
+different and much smaller thing. It was not measured in this pass, because
+building the release variant was not allowed here.
+
+#### 4. Three kinds of source, and only one of them was playable
+
+**This was the real bug.** The site publishes an address and nothing else — no
+field says "this one is YouTube" — so the app has to read the kind of a source
+out of the address, exactly as the web player does. Three kinds are in the
+live catalogue today: an HLS playlist (151 channels; 7 of the mirrors are
+published as `stream.php?id=…&e=.m3u8`), a raw MPEG-TS transport stream (3
+mirrors), and a YouTube live channel (13 mirrors).
+
+**Why the playlist behind the `.php` page failed.** Media3 decides what a
+stream is from the *extension of the path*, and its own table knows `m3u8`,
+`mpd`, `ism` and `isml` and nothing else. The path of
+`…/stream.php?id=sony_max_hd&e=.m3u8` ends in `.php`, so Media3 played it as
+a plain file and never as a playlist. The web player does not have this
+problem because hls.js reads what the address *returns* rather than what the
+address is called. The app now reads the kind the same way and builds the
+right source for it: an HLS source for a playlist, whatever the file is
+called.
+
+**Why the `.ts` mirror failed.** Two reasons. Media3 has no `ts` in its
+extension table either, so a transport stream was never opened as one. And the
+manifest said `usesCleartextTraffic="false"`, which on API 28 and later — the
+Galaxy A21 is API 30 — blocks every plain-HTTP origin outright, and 14 of the
+published mirrors are plain HTTP.
+
+**What it is now.** The kind of a mirror is decided in `core` by
+`StreamKinds.kindOf`, out of the address alone, and it is carried on every
+prepare command so the surface never has to guess. A playlist is played with
+Media3's HLS source, a transport stream with a progressive source over the
+default extractor set (which carries the TS extractor), and a YouTube address
+with YouTube's own player.
+
+**YouTube is not an HLS stream.** YouTube live is played with YouTube's IFrame
+Player API, in a web view, with the same options the web player uses
+(`autoplay`, `playsinline`, `rel=0`, `controls=0`, `iv_load_policy=3`,
+`modestbranding=1`) and the same three events reported back: the player is
+ready, its state changed, it could not play. Nothing is extracted from
+YouTube and no manifest is fetched — the stream is played by YouTube's own
+player, with its advertising, the way the site plays it. A YouTube address
+that names a video is answered on the device, with no network call at all; an
+address that names only a channel is asked about through the site's own
+resolver, the same route the site already uses.
+
+**A YouTube mirror is given longer.** It has to load a page, a player and its
+own advertising before anything is on the screen, so its first-frame deadline
+is 25 seconds rather than the ten every other mirror gets.
+
+**The mirror's own address is not proxied.** Nothing goes through Vercel. The
+mirror is fetched by the device, from the address the site published, in the
+order the site published it. The failover is untouched.
+
+**Cleartext.** A network security config permits plain HTTP in general —
+because a mirror that the browser player can read is a mirror this app has to
+be able to read too — and denies it for the addresses that carry the app's own
+traffic: the site and the update manifest.
+
+**What was not touched.** The server-provided order of the URLs, the published
+ladder order, the FreeTV web player, the site's APIs and the backend, the
+Direct HLS and Secured streaming separation, the eighteen protected paths, and
+the rules about provider credentials. Nothing outside the Android app was
+changed, and no provider-specific header was invented.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours built, 134 unit
+tests, no failures, and the three live-harness tests skipped because they only
+run when they are asked for. Forty of the 134 are new in this pass: how an
+address is read into a kind (`.php` playlist, `.ts` stream, YouTube live, a
+relay that wraps either), how a YouTube address is turned into a video (a
+video named in the address answered without a round trip, a channel address
+asked through the site's route, the answer kept, a failed lookup answering
+nothing, a quote in the address not breaking the body); how a logo is sized
+and what stands in for one; how the guide's list is built a row at a time; and
+that a prepare carries the kind of the source, that a YouTube mirror is given
+the longer budget, and that a feed the app fetches itself is still given ten
+seconds.
+
+**Still open.**
+
+- *Everything here needs the real thing.* The logos, the scrolling, the three
+  kinds of source and the size of the picture on a cheap handset have not been
+  seen on a device since these changes. What still needs the Galaxy A21: that
+  a `.php` mirror plays, that a `.ts` mirror plays, that a YouTube live
+  channel plays and reports its state, that the guide scrolls smoothly while
+  the logos come in, and that a logo is neither cropped nor missing.
+- *The size of the shipping package is still unmeasured.* It can only be
+  measured from the release variant, which was not built here.
+- *The race of Amendment 8 and the kinds of this amendment have not met yet
+  on a device.* A race that contains a YouTube mirror now holds a web view as
+  well as three decoders, and that is more than a cheap handset has been asked
+  for.
+- *X2 and X4* are unchanged, the TV corner preview is still not built, and
+  `latest.json` stays unpublished until a real `SoluPlay.apk` asset exists in
+  GitHub Releases.
+
+Nothing in this pass was committed, pushed, released or deployed, and no
+keystore was touched. The working tree holds the changes for review.
+
+### Amendment 10 — 2026-11-04, Phase 2 correction pass two: the Galaxy A21 says it again
+
+The device test of the Amendment 9 build came back with three things: YouTube
+links are still not playing, the logos are not all in the same rounded shape,
+and they do not all have the same white background. The first of these was
+the finding of the previous pass and it did not work; the other two were
+missed by it.
+
+**1. The logos.** The plate a logo stood on was `Panel` (`0xFF0A1222`) and the
+app's background is `0xFF060B13` — a plate that is nearly the background, so
+there was no plate to see. Logos published with a white background of their
+own therefore looked like white squares, and logos published transparent sat
+on near-black, and the grid showed two kinds of tile. Three things were
+wrong with it, and all three are fixed:
+
+- The plate is white for every channel (`LogoPlateBackground`), so a logo
+  published with a white background of its own and a logo published
+  transparent look the same. The letter that stands in for a logo that could
+  not be fetched is drawn in `OnLogoPlate` on the same white.
+- The corner of the plate is one share of its short side (`PLATE_CORNER_PERCENT
+  = 24`) for every size, so a 40 dp plate in the choice sheet and a 96 dp
+  plate on the TV have the same shape. The TV focus ring used to be a separate
+  96 dp box around an 84 dp plate, whose radius therefore did not match the
+  plate's; the ring is now drawn on the plate itself, through the `border`
+  argument of `ChannelLogo` and `LogoPlate`.
+- The team logos in the match strip were drawn with no plate at all, in a
+  circle, over the app background. They use `LogoPlate` now, like everything
+  else.
+
+A logo is fitted, not cropped: it keeps the proportions it was published
+with, and the plate only says where the logo is.
+
+**A fourth cause, and the reason so many logos were missing.** The loader
+asked for logos without naming itself, and Wikimedia answers `403` to a
+client that names no one. The loader now asks with a browser's name
+(`LOGO_USER_AGENT`), the same way the streams are asked for.
+
+**2. YouTube.** The player was not playing, and the reasons were in the
+implementation, not in the address:
+
+- *The player was rebuilt in a loop.* The surface kept the video it wanted
+  forever, and `onPageFinished` fires again when the YouTube iframe finishes
+  loading — so every iframe load re-ran `start()`, whose page script destroyed
+  the player and built a new one, which loaded a new iframe. The player was
+  recreated endlessly and never reached a playing state.
+- *Everything hung on one script.* The page waited for
+  `https://www.youtube.com/iframe_api` before it would do anything. If that
+  script was slow or blocked, `apiReady` stayed false, `start()` did nothing
+  at all, and nothing was ever said. The page now has no script of YouTube's
+  in it: the embedded player posts what it is doing to the page it is in, and
+  the page hears it and tells it to play.
+- *The web view asked as a web view.* The default Android WebView name
+  carries the token that says it is a web view, and YouTube treats such a
+  player as an unverified one and refuses to play it. The web view now asks
+  with a browser's name.
+- *The page was embedded from YouTube's own origin.* The embedded player only
+  posts its messages to the origin it was told about, so the page is now
+  loaded from the site's own origin — the origin the web player embeds from —
+  and that origin is in the embed's `origin` parameter.
+- *The player was never told to play.* The embed is now told to play, and
+  told again for as long as it has not started, because a player left to
+  itself can come up paused and a paused player has no picture.
+- *Nothing was ever said.* Every failure ended in silence, so a device test
+  could only report "not playing".
+
+So the player is YouTube's own embedded player, put in an iframe with the
+same options the web player uses (`autoplay`, `playsinline`, `rel=0`,
+`controls=0`, `iv_load_policy=3`, `modestbranding=1`) and `enablejsapi=1` so
+that it reports its state, its errors and its readiness. The player is made
+once, for one video, and is never taken down and built again while that video
+is being watched. Nothing is extracted from YouTube and no manifest is
+fetched.
+
+**3. A failure that says something.** The player's own reason is carried from
+the player to the screen: `PlaybackState.detail` holds a short code, and the
+code is put into words by `failureDetail` in the chrome — "YouTube would not
+play this video (error 150)", "The channel's current video could not be
+found", "The YouTube page could not be loaded", "The YouTube player did not
+start". A code nobody knows is shown as it is, because naming it is better
+than hiding it. The reason a YouTube mirror never showed a picture now names
+the player that was waited on.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours built, 152 unit
+tests per suite, no failures, and the three live-harness tests skipped because
+they only run when they are asked for. Eighteen of them are new in this pass:
+five that a player's own reason reaches the screen and is forgotten when the
+next channel is opened, six that the codes are put into words, and seven that
+the YouTube page is what it has to be — the embedded player, autoplay, the
+state reports, the origin, no script of YouTube's, no rebuild, and a video id
+that cannot break the page.
+
+**Still open.**
+
+- *YouTube can only be proved on the device.* There is no emulator and no
+  attached handset on this machine, so the player page is proved by its
+  contents and not by its behaviour. What the Galaxy A21 has to show: that a
+  YouTube live channel plays, and — if it does not — the line under the
+  reason on the panel, which now names what the player said.
+- *The logos are proved by their shape, not by their pixels.* A white plate
+  with one corner and a fitted logo is the same for every channel by
+  construction; whether every logo host answers the device is another
+  question, and the name the loader asks with is now the browser's.
+- *The size of the shipping package is still unmeasured*, and the release
+  variant was not built here.
+
+Nothing in this pass was committed, pushed, released or deployed, and no
+keystore was touched. The working tree holds the changes for review.
+
+### Amendment 11 — 2026-11-04, Phase 2 correction pass three: the YouTube player that plays but says nothing
+
+The Galaxy A21 was asked again, and the report was exact: the YouTube video
+**plays for a few seconds**, the status line says *"tuning mirror 1"* instead of
+*"live"*, and then the picture is taken away on its own and the panel says *"no
+mirror is sending a picture"*.
+
+**The root cause: the player was never spoken to.** The embedded player only
+answers the page that spoke to it first, and the speaking is YouTube's own
+IFrame Player API. Without it the page put the iframe up, the video moved, and
+the player said nothing at all — so the app was told nothing, held the mirror in
+"tuning", and gave it up at its deadline. The deadline did what it was built to
+do: it took away a picture it had never been told about. The page in Amendment
+10 was right that a script of YouTube's must not be *waited for*, and wrong that
+it must not be *used*: the script is the handshake, and without the handshake
+there is no conversation.
+
+**What changed.**
+
+- *The player is driven by YouTube's own player API.* The page loads
+  `https://www.youtube.com/iframe_api` and makes the player with
+  `new YT.Player(...)`, with the video already in it and `origin` set to the
+  site's own origin. The player's `onReady`, `onStateChange` and `onError` are
+  reported to the app.
+- *The state is read as well as heard.* The player's own state is asked for
+  every half second (`getPlayerState()`), so a change that was never announced
+  is still seen, and a player that comes up paused is told to play.
+- *The player is never put up twice.* While the API is on its way the page
+  waits; if the script has not arrived after six seconds the player is put up
+  by hand, and the words that start it listening
+  (`{"event":"listening","channel":"widget"}`) and the word that starts it
+  playing are said to it, again and again, for a while. A player put up by
+  hand and then made again by the API is a picture that starts twice.
+- *A failed request no longer takes the picture away.* The web view reported
+  every failed request for the embed as "the page failed", which was a fatal
+  error: the mirror left the race and the web view was destroyed. Now a
+  request that was called off, a request in a scheme the web view does not
+  know, and any failure at all while the player is already playing are all left
+  alone. Only a player that has never said anything is given up.
+- *YouTube is given longer to prove a picture.* The first-frame deadline for a
+  YouTube mirror was 25 seconds; the player has to fetch a page, a player API
+  and its own advertising on a phone network, so it is now 40 seconds. The
+  ten-second deadline for the feeds the app fetches itself is unchanged.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours built, 160 unit
+tests per suite, no failures, three live-harness tests skipped because they only
+run when they are asked for. Eight are new in this pass: four that the YouTube
+page speaks to the player first, tells it the origin, reads its state and does
+not put it up twice, and four that a failed request does not take a playing
+picture away.
+
+**Still open.**
+
+- *The YouTube handshake can only be proved on the device.* There is no
+  emulator and no attached handset on this machine, so the page is proved by
+  its contents and not by its behaviour. What the Galaxy A21 has to show: that
+  the status line says *"live"* while the video is moving, and — if it does
+  not — the line under the reason on the panel, which names what the player
+  said.
+
+Nothing in this pass was committed, pushed, released or deployed, and no
+keystore was touched. The working tree holds the changes for review.

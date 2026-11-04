@@ -4,6 +4,7 @@ import com.soluplay.core.api.CatalogueBody
 import com.soluplay.core.api.CatalogueSource
 import com.soluplay.core.api.SiteAnsweredException
 import com.soluplay.core.cache.CatalogueCache
+import com.soluplay.core.model.ChannelDetail
 
 /** The copy of the guide that was baked into the APK when it was built. */
 interface SeedProvider {
@@ -25,6 +26,19 @@ class CatalogueRepository(
     private val seed: SeedProvider,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
+
+    /**
+     * The live mirror list of a channel, or null when the site did not give one.
+     *
+     * Playback reads the ladder from the site and from nowhere else. The saved
+     * copy and the baked seed are a guide, not a ladder: a stale mirror list
+     * would walk a viewer into a link that died days ago, and the seed carries
+     * no stream addresses at all.
+     */
+    suspend fun liveChannelDetail(id: String): ChannelDetail? {
+        val body = runCatching { source.channelJson(id) }.getOrNull() ?: return null
+        return CatalogueBody.channel(body)
+    }
 
     suspend fun load(): BrowseSnapshot {
         val live = loadLive()

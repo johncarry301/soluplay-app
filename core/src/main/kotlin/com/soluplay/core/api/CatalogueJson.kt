@@ -96,4 +96,21 @@ object CatalogueBody {
         if (!envelope.success) return null
         return envelope.fixtures
     }
+
+    /**
+     * The channel and its mirror list, or null when the route did not give one.
+     *
+     * The mirror list is the ladder the player walks, already ranked by the
+     * server. A channel with no usable mirror is still a channel, so its
+     * answer is kept with an empty ladder rather than thrown away.
+     */
+    fun channel(body: String?): ChannelDetail? {
+        if (body.isNullOrBlank()) return null
+        val envelope = runCatching {
+            SoluPlayJson.json.decodeFromString(ChannelDetailEnvelope.serializer(), body)
+        }.getOrNull() ?: return null
+
+        if (!envelope.success) return null
+        return envelope.channel
+    }
 }
