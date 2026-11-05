@@ -37,7 +37,7 @@ or a phase that has not been started.
 | 2.4 | The YouTube handshake | Owner | The player page is proved by its contents and not by its behaviour. The Galaxy A21 has to show a YouTube live channel playing, and *"live"* on the status line. |
 | 2.5 | The size of the shipping package | — | Only measurable from the release variant, which was not built. |
 | 2.6 | **X2** and **X4** are unchanged from Phase 1 | — | See 1.1 and 1.2. |
-| 2.7 | The TV corner preview of §6 is not built | — | Browsing the TV grid plays nothing. |
+| 2.7 | ~~The TV corner preview of §6 is not built~~ **closed 2026-11-05** | — | Built in Phase 5, in a player of its own so it never fights the watch screen for the decoder. What is still open about it is in 5.4. |
 | 2.8 | `latest.json` names no build until one is published | — | Until a real `SoluPlay.apk` asset exists in GitHub Releases. The manifest says so rather than pointing at a file that is not there. |
 
 ## Phase 3 — Old-box TLS + resilience · **done**
@@ -52,9 +52,9 @@ or a phase that has not been started.
 
 | # | Open | Who | Why it is open |
 |---|---|---|---|
-| 4.1 | The gate on a device | Owner | The code half of the gate is measured — 231 unit tests per suite, both debug flavours built. *"A new build reaches a device with one tap"* needs a handset and a box, and there is neither attached to this PC. |
-| 4.2 | The two FreeTV routes are not deployed | Owner | `/api/app/version` and `/api/app/bootstrap` are committed in the local `freetv` repository only — nothing pushed, nothing deployed, the live site untouched. §13 says every addition to `freetv` needs its own review first, so they wait for that review. Until then the app reads the manifest from the GitHub mirror and the guide from the two older routes. |
-| 4.3 | The app repository has never been pushed | Owner | `johncarry301/soluplay-app` is public and **empty**: no commits, no releases. The manifest mirror answers 404, the app has nothing to read and the download page has nothing to offer. This repository holds six local commits that have never been pushed. |
+| 4.1 | The gate on a device | Owner | The code half of the gate is measured — 280 unit tests per suite, both debug flavours built. *"A new build reaches a device with one tap"* needs a handset and a box, and there is neither attached to this PC. |
+| 4.2 | The three FreeTV routes are not deployed | Owner | `/api/app/version`, `/api/app/bootstrap` and `/api/app/favourites` are committed in the local `freetv` repository only — nothing pushed, nothing deployed, the live site untouched. §13 says every addition to `freetv` needs its own review first, so they wait for that review. Until then the app reads the manifest from the GitHub mirror, the guide from the two older routes, and keeps its saved list on the device. |
+| 4.3 | The app repository has never been pushed | Owner | `johncarry301/soluplay-app` is public and **empty**: no commits, no releases. The manifest mirror answers 404, the app has nothing to read and the download page has nothing to offer. This repository holds seven local commits that have never been pushed. |
 | 4.4 | The release job has never run a release | Owner | The job that publishes the build and writes the manifest is written and reviewed, but it has never run: it needs the four secrets (0.1) and a `v*` tag. |
 | 4.5 | A real release to update to | Owner | The updater is proved against a manifest, not against a real build. It needs a real `SoluPlay.apk` in GitHub Releases, and **that APK must be signed with the same key as the installed app** — a debug-signed build cannot be replaced by a release-signed one and the system refuses it. The release keystore (0.1) is therefore on the path to the first real update, not only to the store listing. |
 | 4.6 | The install prompt on a real box | Owner | The `PackageInstaller` session, the *install unknown apps* permission, the system's own prompt and the result coming back through the receiver can only be seen on a device. |
@@ -68,16 +68,23 @@ until a release exists, and the publishing job writes the real size and
 fingerprint from the bytes it publishes, so neither number is ever typed by
 hand.
 
-## Phase 5 — Polish · **not started**
+## Phase 5 — Polish · **code done, the device half open**
 
 | # | Open | Who | Why it is open |
 |---|---|---|---|
-| 5.1 | The match board | — | PLAN §5. |
-| 5.2 | Favourites and their sync | — | PLAN §5. |
-| 5.3 | TV on-screen search | — | PLAN §6. |
-| 5.4 | The corner preview on TV | — | PLAN §6, and the same gap as 2.7. |
-| 5.5 | Gestures | — | PLAN §5. |
-| 5.6 | The Bengali and English wording, read by a speaker of both | Owner | The copy is written by me and has not been read aloud. |
+| 5.1 | The match board on a device | Owner | The board is built and grouped by the clock the site publishes (`core/fixtures/BoardSections.kt`), and both surfaces have a board screen. What has not happened is a board read on a handset or a box. |
+| 5.2 | The saved list travelling between two devices | Owner | The list, the key and the sync are built and proved by thirteen unit tests, and the site's route `/api/app/favourites` is written and proved by twenty more — but that route is **not deployed** (4.2), so the second device cannot be given the first device's key yet. |
+| 5.3 | The on-screen keyboard on a television | Owner | The keyboard is drawn and the remote walks a square grid of thirty keys, and the search screen uses it. Whether a channel name can be typed comfortably with a D-pad is only known on a box. |
+| 5.4 | The corner preview on TV | Owner | The preview plays the channel the remote rests on, after 700 ms, in a player of its own. Whether the picture arrives fast enough on an old box, and whether the sound carries on while the guide is read, is a claim about hardware. |
+| 5.5 | The gestures on a real finger | Owner | The rules are pure and tested (`core/gestures/Gestures.kt`), and the surface that reads them is built. What has to be seen: that a tap brings the words in **without pausing the picture**, and that a sideways swipe asks for another mirror. |
+| 5.6 | The Bengali and English wording, read by a speaker of both | Owner | The copy is written by me and has not been read aloud. The switch is remembered on the device, and channel and category names are the site's own and are never translated. |
+
+**Closed in this pass.** The app had one screen on the phone and one on the
+television, both of them browsing. It now has four places on the phone (home,
+matches, search, saved) and one screen at a time under a chrome bar on the
+television, with a drawn keyboard, a corner preview and a saved list. The
+gestures the plan named are rules in `core` rather than code in a surface,
+and the Bengali/English switch is remembered instead of resetting.
 
 ## Phase 6 — `/tv` web layout · **not started**
 

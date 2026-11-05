@@ -47,12 +47,7 @@ fun MatchStrip(
 ) {
     if (fixtures.isEmpty()) return
 
-    val now by produceState(System.currentTimeMillis()) {
-        while (true) {
-            value = System.currentTimeMillis()
-            delay(1000)
-        }
-    }
+    val now = rememberNowMillis()
 
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()),
@@ -69,15 +64,40 @@ fun MatchStrip(
     }
 }
 
+/**
+ * The clock on the screen, ticking.
+ *
+ * The countdowns on the cards are read from it, so it is the one clock the
+ * whole board shares.
+ */
 @Composable
-private fun MatchCard(
+fun rememberNowMillis(): Long {
+    val now by produceState(System.currentTimeMillis()) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    return now
+}
+
+/**
+ * One match card.
+ *
+ * The card says which competition it is from, which two sides are playing and
+ * how long it is until the match starts. It is the same card the strip and the
+ * board draw, so a match looks the same wherever it is seen.
+ */
+@Composable
+fun MatchCard(
     fixture: Fixture,
     nowMillis: Long,
-    scale: Float,
+    modifier: Modifier = Modifier,
+    scale: Float = 1f,
     onClick: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width((196 * scale).dp)
             .clip(RoundedCornerShape(14.dp))
             .background(Panel)
@@ -119,7 +139,7 @@ private fun MatchCard(
         }
 
         Text(
-            text = countdownLine(fixture, nowMillis),
+            text = matchCountdown(fixture, nowMillis),
             color = Accent,
             fontSize = (11 * scale).sp,
             fontWeight = FontWeight.SemiBold,
@@ -167,7 +187,7 @@ private fun Team(
  * to a match that is still to come.
  */
 @Composable
-private fun countdownLine(fixture: Fixture, nowMillis: Long): String {
+fun matchCountdown(fixture: Fixture, nowMillis: Long): String {
     when (BoardPhase.of(fixture.phase)) {
         BoardPhase.LIVE -> return text("খেলা চলছে", "The match is on")
         BoardPhase.FINISHED -> return text("খেলা শেষ হয়েছে", "The match is over")

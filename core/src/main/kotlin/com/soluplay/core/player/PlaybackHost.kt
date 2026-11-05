@@ -40,6 +40,16 @@ interface PlaybackHost {
     /** Puts the player of this try at playing on the screen. */
     fun select(attempt: Long)
 
+    /**
+     * Holds the picture of this try at playing.
+     *
+     * The picture stays on the screen: the feed is held, not taken away.
+     */
+    fun pause(attempt: Long)
+
+    /** Lets the picture of this try at playing run again. */
+    fun resume(attempt: Long)
+
     /** Stops playing and clears the picture. */
     fun stop()
 

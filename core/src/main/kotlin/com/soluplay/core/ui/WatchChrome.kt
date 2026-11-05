@@ -60,6 +60,7 @@ fun playbackFailure(state: PlaybackState): String = when (state.failure) {
     FailoverReason.PLAYER_ERROR -> text("মিররটি চালানো যায়নি।", "That mirror could not be played.")
     FailoverReason.NO_MIRROR -> Copy.noMirror()
     FailoverReason.LADDER_UNREADABLE -> Copy.ladderUnreadable()
+    FailoverReason.SKIPPED -> text("অন্য মিরর চলছে।", "Another mirror is being tried.")
 }
 
 /**

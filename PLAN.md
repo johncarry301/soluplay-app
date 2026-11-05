@@ -1386,3 +1386,136 @@ number 2.
 This pass is committed in the local repository and **nothing was pushed,
 released or deployed**; no keystore was touched. The working tree holds the
 changes for review.
+
+### Amendment 14 — 2026-11-05, Phase 5: the polish the plan asked for
+
+Phase 5 is the one row of §12 that has no gate: *"Match board, favourites +
+sync, TV on-screen search, corner preview, gestures, Bengali/English"* — done
+when *—*. A phase without a gate cannot be measured, so this amendment says
+what was built, what it was proved by, and what is left for a device.
+
+**The saved list, and the key it travels under.**
+
+The plan's fence (§0) is that the app has no accounts and never will, so the
+**key is the identity**. The key is eight characters from a thirty-two letter
+alphabet with the characters that are read wrong over the phone left out —
+no `I`, no `O`, no `0`, no `1` — so a key that is read aloud is the key that
+was written. It is written on the device, shown to the viewer, and typed into
+the second device that is to carry the same list.
+
+The rules live in `core/favourites/` and are stated plainly, because a list is
+the one thing a viewer would notice losing:
+
+- **The device's copy is the one the screen shows, and it is written the
+  moment a channel is marked.** A viewer who marks a channel on a train with
+  no signal must not lose it.
+- **The site is asked only when the viewer asks for it.** The server is never
+  pushed to in the background.
+- **A site that cannot be reached never empties the list.** A `null` answer
+  and an empty list are two different things, and the app tells them apart:
+  a list that is emptied because the network was down is worse than a list
+  that is a day old.
+- **The list that was written last is the list that is kept.** There is no
+  account, so there is no merge and no conflict screen to fall back on.
+- **A key that is not one is refused and nothing is written.** Repairing a
+  key would put a viewer's list under a key nobody typed.
+
+The copy travels as ids, and the names stay on the device: a favourite whose
+channel is not in today's catalogue is still a favourite, and it is still
+named.
+
+**The site answers under that key, and only that key.**
+
+`/api/app/favourites` is a new route in `freetv`: `GET ?key=…` answers the
+ids the site holds, `POST {key, ids}` puts them there. It is written in the
+house style — a Mongo model, a store that refuses rather than answering from
+nowhere, a body read under a cap, a key that is not one refused whole — and
+**it is not deployed**. §13 says every addition to `freetv` needs its own
+review before it goes live, so it waits with the two Phase 4 routes beside
+it. Until then the app keeps the list on the device and says the site could
+not be reached.
+
+**The board, the search and the words.**
+
+- *The board* (`core/fixtures/BoardSections.kt`) groups the matches into the
+  three the plan names — live now, coming up, finished — from the clock the
+  site publishes, not from a second clock of our own.
+- *The search* (`core/search/ChannelSearch.kt`) matches a name or a category
+  against the guide that is already on the device, so it answers while
+  offline.
+- *The gestures* (`core/gestures/Gestures.kt`) are rules, not code in a
+  surface: a finger that travelled is a swipe and a finger that stayed is a
+  tap, the swipe up changes the channel, the swipe sideways asks for another
+  mirror, two fingers hold the feed and one tap only brings the words in.
+  **A tap never pauses the picture** — that is the rule the plan kept from
+  the web.
+- *The words* (`core/ui/Copy.kt`) are Bengali first with English beside them,
+  and the choice is **remembered on the device**, because a viewer who turned
+  the words into English once expects to find them in English next time.
+  Channel and category names are the site's own and are never translated.
+
+**The phone has four places now.** Home (the strip, the rails, the logo
+grid), the match board, the search and the saved list, behind a pill row of
+four icons. The choice sheet is a sheet, the back key closes it, and a
+channel is marked with a star on the watch screen and in the saved list.
+
+**The television is a different app, and it is now built as one.**
+
+- One screen at a time, under a chrome bar that is **row zero of every
+  screen's focus grid**, so the remote can always get back to it.
+- One key handler per screen root owns the arrows and Enter, and the choice
+  sheet is modal: the handler swallows the arrows while the sheet is open and
+  the back key closes it.
+- *The on-screen keyboard* (`TvKeyboard.kt`) is drawn, not typed: three rows
+  of ten, the last row holding the space, the delete, the clear and the
+  search, so the remote walks a square grid and never a ragged one.
+- *The corner preview* plays the channel the remote is resting on in a
+  380 × 214 dp box in the corner, after the remote has rested on it for 700
+  ms. **It is a second player and a second view model**, so the picture of
+  the guide and the picture of the watch screen never fight over one decoder,
+  and the sound carries on while the guide is read.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours built and
+**280 unit tests per suite**, no failures, 4 skipped — the live harnesses,
+which only run when they are asked for. **Forty-nine of those tests are new
+in this phase**: thirteen that keep a saved list (a key that is read right, a
+key that is not, a list that is never lost because the site could not be
+reached, the site that is the truth when it answers, a name the device knows
+is kept when the site holds only ids, a list that could not be pushed stays on
+the device, another device's key is taken on); nine that match a search; nine
+that group a board; twelve that turn a gesture into an intent; and six that
+step to the next mirror.
+
+The site half is measured too: `npm run test:all` in `freetv` is green at
+**184 tests** (twenty of them new, for the favourites route alone), and
+`npm run typecheck` and `npm run build` are both green, with
+`/api/app/favourites` registered as a dynamic route.
+
+The APKs are in `artifacts/phase5-polish/`, signed with the same debug key as
+Phase 4 (`12e85bad…`), so one can be installed over the other:
+
+| Artifact | sha256 |
+|---|---|
+| `SoluPlay-Phase5-Polish-phone-debug-0.2.0.apk` | `58c7b18d793ec5bd567e3966be132f2865f96c743d39a547aabcb5332851f6d5` |
+| `SoluPlay-Phase5-Polish-tv-debug-0.2.0.apk` | `128676db72786d991399e8d660af00cff0edce09e8463b5e74ddcccdb3eb2fe2` |
+
+The build number is still **2** and the name still **0.2.0**: no release has
+been published, so there is nothing for the number to be newer than. Raising
+it is the owner's call when the first release is cut.
+
+**Still open.**
+
+- *Everything that is a claim about a screen.* The corner preview, the focus
+  ring, the drawn keyboard, the gestures on a real finger, the sheet's
+  animation — none of it has been seen on a handset or a box.
+- *The saved list has never travelled.* The site route is written and
+  proved, but it is not deployed, so the second device cannot be given the
+  first device's key yet.
+- *The words have not been read aloud.* They were written by me and the
+  Bengali has not been spoken by a speaker of it.
+- *The last-good catalogue, the seed catalogue and the backup base URLs* are
+  unchanged from Phase 3 (3.1).
+
+This pass is committed in the local repository and **nothing was pushed,
+released or deployed**; no keystore was touched. The `freetv` additions are
+in that repository's working tree for review, and the site is untouched.

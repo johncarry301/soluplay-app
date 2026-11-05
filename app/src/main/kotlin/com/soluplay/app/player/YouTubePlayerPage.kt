@@ -61,6 +61,7 @@ var mounted = false;
 var lastState = -1;
 var playCalls = 0;
 var nudges = 0;
+var held = false;
 
 /* The app is told what the player does. */
 function report(name, value) {
@@ -87,8 +88,10 @@ function pollState() {
       var state = player.getPlayerState();
       reportState(state);
       /* A player that came up paused is told to play, again and again for a
-         while: a paused player has no picture at all. */
-      if ((state === 2 || state === 5) && playCalls < 20) {
+         while: a paused player has no picture at all. A player the viewer is
+         holding is left alone — the app asked for that, and the page must not
+         argue with it. */
+      if (!held && (state === 2 || state === 5) && playCalls < 20) {
         playCalls += 1;
         try { player.playVideo(); } catch (err) { }
       }
@@ -201,10 +204,26 @@ function start(videoId) {
   lastState = -1;
   playCalls = 0;
   nudges = 0;
+  held = false;
   if (apiReady) { create(videoId); }
   else if (apiFailed || apiWaitOver) { embed(videoId); }
   /* Otherwise the API is still on its way, and the player is made when it
      arrives — so the picture is never started twice. */
+}
+
+/* The viewer is holding the feed. The picture stays, and the page stops
+   telling the player to play. */
+function hold() {
+  held = true;
+  if (player && player.pauseVideo) {
+    try { player.pauseVideo(); } catch (err) { }
+  }
+}
+
+/* The viewer let the feed run again. */
+function release() {
+  held = false;
+  nudge();
 }
 
 /* The player is told to play. */

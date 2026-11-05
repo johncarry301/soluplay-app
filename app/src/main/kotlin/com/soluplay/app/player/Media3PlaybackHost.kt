@@ -201,6 +201,30 @@ class Media3PlaybackHost(
         racers.keys.toList().forEach { cancel(it) }
     }
 
+    /**
+     * Holds the picture of this try at playing.
+     *
+     * The picture stays on the screen: the decoder is not given up, because a
+     * feed that is held and a feed that is broken are told apart by the
+     * viewer, not by the player.
+     */
+    override fun pause(attempt: Long) {
+        when (val racer = racers[attempt]) {
+            is MediaRacer -> racer.player.pause()
+            is YouTubeRacer -> racer.surface.pause()
+            null -> Unit
+        }
+    }
+
+    /** Lets the picture of this try at playing run again. */
+    override fun resume(attempt: Long) {
+        when (val racer = racers[attempt]) {
+            is MediaRacer -> racer.player.play()
+            is YouTubeRacer -> racer.surface.resume()
+            null -> Unit
+        }
+    }
+
     override fun release() {
         stop()
         stage = null

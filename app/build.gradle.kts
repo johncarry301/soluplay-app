@@ -181,6 +181,7 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.core)
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)

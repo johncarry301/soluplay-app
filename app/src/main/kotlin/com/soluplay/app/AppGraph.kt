@@ -13,7 +13,12 @@ import com.soluplay.core.browse.CatalogueRepository
 import com.soluplay.core.browse.SeedCatalogue
 import com.soluplay.core.browse.SeedProvider
 import com.soluplay.core.cache.FileCatalogueCache
+import com.soluplay.core.favourites.FileFavouriteStore
+import com.soluplay.core.favourites.FavouritesRepository
+import com.soluplay.core.favourites.FavouritesViewModelFactory
+import com.soluplay.core.favourites.HttpFavouriteSync
 import com.soluplay.core.ui.LogoLoader
+import com.soluplay.core.ui.UiLanguageStore
 import com.soluplay.core.update.ApkDownloader
 import com.soluplay.core.update.UpdateManifestClient
 import java.io.File
@@ -38,6 +43,9 @@ object AppGraph {
 
     /** Where a downloaded build is kept until it is installed. */
     const val UPDATE_DIRECTORY = "updates"
+
+    /** Where the viewer's own list of favourites is kept. */
+    const val FAVOURITES_DIRECTORY = "favourites"
 
     /** The secure context the repair is carried by, once it is installed. */
     @Volatile
@@ -96,6 +104,27 @@ object AppGraph {
      */
     fun surfaceOf(context: Context): String =
         if (context.packageName.endsWith(".tv")) "tv" else "phone"
+
+    /**
+     * The favourites list, built out of the app's own parts.
+     *
+     * The list is kept on the device and copied to the site under a key the
+     * viewer carries, so the app needs no account and asks for no credential.
+     * The site is asked over the same transport as everything else, so a
+     * television whose trust store was never updated still reaches it.
+     */
+    fun favourites(context: Context): FavouritesViewModelFactory {
+        val transport = transport()
+        return FavouritesViewModelFactory(
+            FavouritesRepository(
+                store = FileFavouriteStore(File(context.filesDir, FAVOURITES_DIRECTORY)),
+                sync = HttpFavouriteSync(reader = transport, poster = transport),
+            ),
+        )
+    }
+
+    /** The language the chrome speaks, and the choice that is remembered. */
+    fun language(context: Context): UiLanguageStore = UiLanguageStore(context)
 
     /** The build number of the app that is running. */
     private fun versionCodeOf(context: Context): Int {

@@ -158,6 +158,26 @@ class YouTubeSurface(
     }
 
     /**
+     * Holds the picture.
+     *
+     * The player is told to hold, and the page stops insisting that it plays:
+     * a player that is held and a player that came up paused are told apart
+     * on the page, so the app's own request is not fought.
+     */
+    fun pause() {
+        if (state == STATE_PAUSED) return
+        state = STATE_PAUSED
+        view.evaluateJavascript("hold();", null)
+    }
+
+    /** Lets the picture run again. */
+    fun resume() {
+        if (state != STATE_PAUSED) return
+        state = STATE_PLAYING
+        view.evaluateJavascript("release();", null)
+    }
+
+    /**
      * The clock of the picture.
      *
      * A web view has no clock of its own, so the app counts: the clock moves

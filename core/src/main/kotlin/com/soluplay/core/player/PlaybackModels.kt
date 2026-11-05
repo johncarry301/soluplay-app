@@ -52,6 +52,9 @@ enum class FailoverReason {
 
     /** The ladder could not be read from the site. */
     LADDER_UNREADABLE,
+
+    /** The viewer asked for another mirror by hand. */
+    SKIPPED,
 }
 
 /**

@@ -141,4 +141,90 @@ object Copy {
     )
 
     @Composable fun tryAgain() = text("আবার চেষ্টা করুন", "Try again")
+
+    @Composable fun home() = text("হোম", "Home")
+
+    @Composable fun matchesTab() = text("ম্যাচ", "Matches")
+
+    @Composable fun searchTab() = text("খুঁজুন", "Search")
+
+    @Composable fun savedTab() = text("পছন্দ", "Saved")
+
+    @Composable fun liveNow() = text("এখন খেলা হচ্ছে", "Live now")
+
+    @Composable fun comingUp() = text("আসছে", "Coming up")
+
+    @Composable fun over() = text("শেষ হয়ে গেছে", "Finished")
+
+    @Composable fun noMatches() = text(
+        "এখন বোর্ডে কোনো ম্যাচ নেই।",
+        "There is no match on the board.",
+    )
+
+    @Composable fun searchHint() = text("চ্যানেল খুঁজুন", "Search the channels")
+
+    @Composable fun nothingFound() = text(
+        "এই নামে কোনো চ্যানেল নেই।",
+        "No channel carries that name.",
+    )
+
+    @Composable fun favouritesTitle() = text("পছন্দের তালিকা", "Your saved list")
+
+    @Composable fun yourCode() = text("আপনার কোড", "Your code")
+
+    @Composable fun codeOfAnotherDevice() = text(
+        "অন্য ডিভাইসের কোড",
+        "The code of another device",
+    )
+
+    @Composable fun useThisCode() = text("এই কোড নিন", "Use this code")
+
+    @Composable fun codeNotValid() = text(
+        "এই কোডটি ঠিক নয়।",
+        "That is not a code the app wrote.",
+    )
+
+    @Composable fun takeFromServer() = text("সার্ভার থেকে নিন", "Take from the site")
+
+    @Composable fun giveToServer() = text("সার্ভারে দিন", "Give to the site")
+
+    @Composable fun syncedNow() = text("সার্ভারের সাথে মিলেছে", "The site has the same list")
+
+    @Composable fun syncFailed() = text(
+        "সার্ভারের সাথে যোগাযোগ হয়নি। তালিকা এই ডিভাইসে আছে।",
+        "The site could not be reached. The list is on this device.",
+    )
+
+    @Composable fun noFavourites() = text(
+        "এখনো কোনো চ্যানেল পছন্দ করা হয়নি।",
+        "No channel has been saved yet.",
+    )
+
+    @Composable fun saveChannel() = text("পছন্দে রাখুন", "Save this channel")
+
+    @Composable fun savedChannel() = text("পছন্দে আছে", "Saved")
+
+    @Composable fun removeChannel() = text("সরান", "Remove")
+
+    @Composable fun nextMirror() = text("অন্য মিরর", "Another mirror")
+
+    @Composable fun heldFeed() = text("ফিড থামানো হয়েছে", "The feed is held")
+
+    @Composable fun holdFeed() = text("ফিড থামান", "Hold the feed")
+
+    @Composable fun resumeFeed() = text("ফিড চালু করুন", "Resume the feed")
+
+    @Composable fun englishToggle() = text("EN", "EN")
+
+    @Composable fun bengaliToggle() = text("বাং", "বাং")
+
+    @Composable fun preview() = text("প্রিভিউ", "Preview")
+
+    @Composable fun spaceKey() = text("স্পেস", "Space")
+
+    @Composable fun deleteKey() = text("মুছুন", "Delete")
+
+    @Composable fun clearKey() = text("মুছে ফেলুন", "Clear")
+
+    @Composable fun typeHere() = text("অক্ষর লিখুন", "Type here")
 }

@@ -7,6 +7,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,13 +18,16 @@ import com.soluplay.app.update.ApkInstaller
 import com.soluplay.app.update.UpdateViewModel
 import com.soluplay.core.browse.BrowseViewModel
 import com.soluplay.core.browse.BrowseViewModelFactory
+import com.soluplay.core.favourites.FavouritesViewModel
 import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.player.PlaybackViewModelFactory
 import com.soluplay.core.ui.Background
+import com.soluplay.core.ui.LocalUiLanguage
+import com.soluplay.core.ui.UiLanguageStore
 import com.soluplay.core.ui.UpdateBlockPanel
 import com.soluplay.core.ui.UpdateSheet
 import com.soluplay.core.update.UpdateState
-import com.soluplay.phone.PhoneHomeScreen
+import com.soluplay.phone.PhoneShell
 
 /**
  * The handset entry. It lives in the phone flavour because the TV build has
@@ -50,6 +54,14 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /** The viewer's own list of channels, kept on this device. */
+    private val favouritesViewModel: FavouritesViewModel by viewModels {
+        AppGraph.favourites(applicationContext)
+    }
+
+    /** The language the chrome speaks, and the choice that is remembered. */
+    private val languageStore: UiLanguageStore by lazy { AppGraph.language(applicationContext) }
+
     /** The updater, which asks the site whether there is a newer build. */
     private val updateViewModel: UpdateViewModel by viewModels {
         AppGraph.updater(applicationContext)
@@ -61,6 +73,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             SoluPlayTheme {
                 val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+                val spoken by languageStore.language.collectAsStateWithLifecycle()
 
                 Surface(color = Background, modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -74,11 +87,15 @@ class MainActivity : ComponentActivity() {
                                 onAllowInstall = { allowInstall() },
                             )
                         } else {
-                            PhoneHomeScreen(
-                                viewModel = browseViewModel,
-                                playback = playbackViewModel,
-                                host = host,
-                            )
+                            CompositionLocalProvider(LocalUiLanguage provides spoken) {
+                                PhoneShell(
+                                    viewModel = browseViewModel,
+                                    playback = playbackViewModel,
+                                    host = host,
+                                    favourites = favouritesViewModel,
+                                    language = languageStore,
+                                )
+                            }
                         }
 
                         UpdateSheet(

@@ -19,11 +19,13 @@ import com.soluplay.app.update.ApkInstaller
 import com.soluplay.app.update.UpdateViewModel
 import com.soluplay.core.browse.BrowseViewModel
 import com.soluplay.core.browse.BrowseViewModelFactory
+import com.soluplay.core.favourites.FavouritesViewModel
 import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.player.PlaybackViewModelFactory
 import com.soluplay.core.ui.Background
 import com.soluplay.core.ui.UpdateBlockPanel
 import com.soluplay.core.ui.UpdateSheet
+import com.soluplay.core.ui.UiLanguageStore
 import com.soluplay.core.update.UpdateState
 
 /**
@@ -45,6 +47,30 @@ class TvActivity : ComponentActivity() {
             host = host,
         )
     }
+
+    /**
+     * The player of the corner preview.
+     *
+     * The preview plays while the guide is being browsed, and the watch
+     * screen plays on its own — so the two need a player each, and neither
+     * of them takes the decoder from the other.
+     */
+    private val previewHost: Media3PlaybackHost by lazy { Media3PlaybackHost(applicationContext) }
+
+    private val previewPlaybackViewModel: PlaybackViewModel by viewModels {
+        PlaybackViewModelFactory(
+            repository = AppGraph.repository(applicationContext),
+            host = previewHost,
+        )
+    }
+
+    /** The viewer's own list of channels. */
+    private val favouritesViewModel: FavouritesViewModel by viewModels {
+        AppGraph.favourites(applicationContext)
+    }
+
+    /** The language the chrome speaks, and the choice that is remembered. */
+    private val languageStore: UiLanguageStore by lazy { AppGraph.language(applicationContext) }
 
     /** The updater, which asks the site whether there is a newer build. */
     private val updateViewModel: UpdateViewModel by viewModels {
@@ -71,10 +97,14 @@ class TvActivity : ComponentActivity() {
                                 onAllowInstall = { allowInstall() },
                             )
                         } else {
-                            TvHomeScreen(
+                            TvShell(
                                 viewModel = browseViewModel,
                                 playback = playbackViewModel,
                                 host = host,
+                                previewHost = previewHost,
+                                previewPlayback = previewPlaybackViewModel,
+                                favourites = favouritesViewModel,
+                                language = languageStore,
                             )
                         }
 

@@ -73,6 +73,36 @@ class PlaybackViewModel(
         publish()
     }
 
+    /**
+     * The viewer asked for another mirror of this channel.
+     *
+     * The walk moves on to the next published mirror and the one on the
+     * screen is given up. The published order is the server's and is not
+     * changed by the request.
+     */
+    fun skipMirror() {
+        apply(machine.skipToNextMirror())
+        publish()
+    }
+
+    /**
+     * The viewer held the feed, or let it run again.
+     *
+     * The picture stays on the screen while the feed is held: the picture is
+     * the last thing a viewer has, and taking it away would be a worse answer
+     * than a frozen picture.
+     */
+    fun setPaused(paused: Boolean) {
+        val attempt = machine.currentAttempt
+        if (paused) {
+            machine.hold()
+            host.pause(attempt)
+        } else {
+            machine.releaseHold()
+            host.resume(attempt)
+        }
+    }
+
     override fun onFirstFrame(attempt: Long) {
         viewModelScope.launch {
             apply(machine.onFirstFrame(attempt))

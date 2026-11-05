@@ -23,6 +23,9 @@ object ApiConfig {
     /** Added in Phase 4: the update manifest. */
     const val VERSION_PATH = "/api/app/version"
 
+    /** Added in Phase 5: the viewer's favourites, under a key the viewer carries. */
+    const val FAVOURITES_PATH = "/api/app/favourites"
+
     /** The manifest mirror, so a site outage cannot stop an update. */
     const val VERSION_MIRROR_URL =
         "https://raw.githubusercontent.com/johncarry301/soluplay-app/main/latest.json"

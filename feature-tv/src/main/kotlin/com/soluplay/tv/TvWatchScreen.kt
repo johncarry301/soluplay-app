@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +31,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.soluplay.app.player.Media3PlaybackHost
 import com.soluplay.app.player.PlayerSurface
+import com.soluplay.core.model.Channel
 import com.soluplay.core.player.PlaybackPhase
 import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.ui.Accent
@@ -53,32 +56,58 @@ import com.soluplay.core.ui.playbackStatus
  *
  * The picture fills the screen and the words sit over it, in the size the
  * room can read. The remote leaves through its own back key and through the
- * one button on screen, because a viewer holding a remote should never have
- * to guess.
+ * buttons on screen, because a viewer holding a remote should never have to
+ * guess.
+ *
+ * The buttons are the four things a viewer asks for on a television: leave,
+ * another mirror of this channel, hold the feed and keep this channel on the
+ * viewer's own list.
  */
 @Composable
 fun TvWatchScreen(
-    channelId: String,
-    channelName: String,
-    logoUrl: String,
+    channel: Channel,
     host: Media3PlaybackHost,
     playback: PlaybackViewModel,
+    marked: Boolean,
+    onToggleFavourite: () -> Unit,
     onClose: () -> Unit,
 ) {
     val state by playback.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(channelId) {
-        playback.open(channelId, channelName, logoUrl)
+    var held by remember { mutableStateOf(false) }
+
+    LaunchedEffect(channel.id) {
+        held = false
+        playback.open(channel.id, channel.name, channel.logo)
     }
-    DisposableEffect(channelId) {
+    DisposableEffect(channel.id) {
         onDispose { playback.close() }
     }
     BackHandler { onClose() }
 
+    val requesters = remember { List(WATCH_BUTTONS) { FocusRequester() } }
+    val rows = remember(requesters) { listOf(requesters) }
+    val focus = remember { TvFocus() }
+    val scope = rememberCoroutineScope()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (event.key) {
+                    Key.DirectionRight -> {
+                        focus.move(rows, 0, 1, scope)
+                        true
+                    }
+                    Key.DirectionLeft -> {
+                        focus.move(rows, 0, -1, scope)
+                        true
+                    }
+                    else -> false
+                }
+            },
     ) {
         PlayerSurface(host = host, modifier = Modifier.fillMaxSize())
 
@@ -89,7 +118,7 @@ fun TvWatchScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                text = state.channelName.ifBlank { channelName },
+                text = state.channelName.ifBlank { channel.name },
                 color = Color.White,
                 fontSize = 30.sp,
                 fontWeight = FontWeight.Bold,
@@ -106,15 +135,47 @@ fun TvWatchScreen(
                 color = if (state.onAir) Accent else Muted,
                 fontSize = 22.sp,
             )
+            if (held) {
+                Text(
+                    text = Copy.heldFeed(),
+                    color = Accent,
+                    fontSize = 20.sp,
+                )
+            }
             MirrorBadge(state = state, fontSize = 20.sp)
         }
 
-        TvBackPill(
-            onClose = onClose,
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 48.dp, bottom = 40.dp),
-        )
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TvWatchButton(
+                text = if (marked) Copy.savedChannel() else Copy.saveChannel(),
+                requester = requesters.getOrNull(3),
+                onPress = onToggleFavourite,
+            )
+            TvWatchButton(
+                text = if (held) Copy.resumeFeed() else Copy.holdFeed(),
+                requester = requesters.getOrNull(2),
+                onPress = {
+                    held = !held
+                    playback.setPaused(held)
+                },
+            )
+            TvWatchButton(
+                text = Copy.nextMirror(),
+                requester = requesters.getOrNull(1),
+                onPress = playback::skipMirror,
+            )
+            TvWatchButton(
+                text = Copy.back(),
+                requester = requesters.getOrNull(0),
+                onPress = onClose,
+            )
+        }
 
         val dead = state.phase == PlaybackPhase.EXHAUSTED || state.phase == PlaybackPhase.FAILED
         if (dead) {
@@ -128,29 +189,31 @@ fun TvWatchScreen(
     }
 }
 
-/** The one button the remote can press to leave the picture. */
-@Composable
-private fun TvBackPill(onClose: () -> Unit, modifier: Modifier = Modifier) {
-    var focused by remember { mutableStateOf(false) }
-    val requester = remember { FocusRequester() }
+/** How many buttons the watch screen has. */
+private const val WATCH_BUTTONS = 4
 
-    LaunchedEffect(Unit) {
-        requester.requestFocus()
-    }
+/** One of the buttons the remote can press on the watch screen. */
+@Composable
+private fun TvWatchButton(
+    text: String,
+    requester: FocusRequester?,
+    onPress: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
 
     Text(
-        text = Copy.back(),
+        text = text,
         color = if (focused) Background else Accent,
         fontSize = 20.sp,
-        modifier = modifier
-            .focusRequester(requester)
+        modifier = Modifier
+            .then(if (requester == null) Modifier else Modifier.focusRequester(requester))
             .focusable()
             .onFocusChanged { focused = it.isFocused }
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (event.key) {
                     Key.Enter, Key.DirectionCenter, Key.NumPadEnter, Key.Spacebar -> {
-                        onClose()
+                        onPress()
                         true
                     }
                     else -> false

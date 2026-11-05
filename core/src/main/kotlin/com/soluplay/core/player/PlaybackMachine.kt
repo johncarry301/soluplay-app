@@ -110,6 +110,24 @@ class PlaybackMachine(
      */
     private val reserve = mutableListOf<Published>()
 
+    /**
+     * The mirrors the viewer has left by hand.
+     *
+     * A mirror that was skipped is not offered again in the same playback:
+     * the viewer asked for something else, and being given that mirror back
+     * a minute later would be ignoring the request.
+     */
+    private val skipped = mutableSetOf<String>()
+
+    /**
+     * True while the viewer is holding the feed with two fingers.
+     *
+     * A held feed is not a stalled one: the picture is frozen because the
+     * viewer asked for it, so the deadlines wait and the walk does not move
+     * on to the next mirror.
+     */
+    private var held = false
+
     /** The candidate that proved a picture, if one has. */
     private var winner: Candidate? = null
 
@@ -252,6 +270,7 @@ class PlaybackMachine(
      * to come back before it is called stalled.
      */
     fun onStall(attempt: Long): List<PlaybackCommand> {
+        if (held) return emptyList()
         val candidate = candidates.firstOrNull { it.attempt == attempt } ?: return emptyList()
         if (candidate !== winner) return emptyList()
         if (phase != PlaybackPhase.ON_AIR) return emptyList()
@@ -313,6 +332,7 @@ class PlaybackMachine(
      * last frame of a dead carrier.
      */
     fun onPosition(positionMs: Long): List<PlaybackCommand> {
+        if (held) return emptyList()
         if (winner == null) return emptyList()
         if (phase != PlaybackPhase.ON_AIR && phase != PlaybackPhase.RECOVERING) return emptyList()
 
@@ -344,6 +364,7 @@ class PlaybackMachine(
      * given up after that.
      */
     fun onTick(): List<PlaybackCommand> {
+        if (held) return emptyList()
         val moment = now()
 
         return when (phase) {
@@ -385,6 +406,32 @@ class PlaybackMachine(
 
             else -> emptyList()
         }
+    }
+
+    /**
+     * The viewer held the feed.
+     *
+     * The picture stays on the screen and the deadlines wait: a feed the
+     * viewer is holding is not a dead carrier, and the walk must not move on
+     * to the next mirror because of it.
+     */
+    fun hold() {
+        held = true
+        stallSince = null
+        lastPosition = null
+    }
+
+    /**
+     * The viewer let the feed run again.
+     *
+     * The clock of the picture is forgotten, so the feed is given a moment to
+     * start moving again instead of being called frozen for standing still
+     * while it was held.
+     */
+    fun releaseHold() {
+        held = false
+        stallSince = null
+        lastPosition = null
     }
 
     /** Stop playing and forget the walk. */
@@ -439,11 +486,56 @@ class PlaybackMachine(
      *
      * A mirror that lost an earlier race comes first, because it was
      * published before the ones that have not been tried yet.
+     *
+     * A mirror the viewer has skipped is not offered again.
      */
     private fun nextPublished(): Published? {
-        if (reserve.isNotEmpty()) return reserve.removeAt(0)
-        val link = ladder.next() ?: return null
-        return Published(link, ladder.position)
+        while (reserve.isNotEmpty()) {
+            val candidate = reserve.removeAt(0)
+            if (candidate.link.url in skipped) continue
+            return candidate
+        }
+
+        while (true) {
+            val link = ladder.next() ?: return null
+            if (link.url in skipped) continue
+            return Published(link, ladder.position)
+        }
+    }
+
+    /**
+     * The viewer asked for another mirror.
+     *
+     * The mirror on the screen is given up and the next published one is
+     * tried. The published order is not changed and the mirror is not
+     * re-ranked: the walk carries on from where it was, and the mirror that
+     * was on the screen is not offered again in this playback.
+     *
+     * A channel with one mirror has nowhere else to go, and says so.
+     */
+    fun skipToNextMirror(): List<PlaybackCommand> {
+        if (phase == PlaybackPhase.IDLE ||
+            phase == PlaybackPhase.EXHAUSTED ||
+            phase == PlaybackPhase.FAILED
+        ) {
+            return emptyList()
+        }
+
+        val commands = mutableListOf<PlaybackCommand>()
+        candidates.forEach { commands += PlaybackCommand.Cancel(it.attempt) }
+        candidates.clear()
+
+        winner?.let { skipped += it.link.url }
+        winner = null
+
+        deadlineAt = null
+        stallSince = null
+        lastPosition = null
+        failure = FailoverReason.SKIPPED
+        phase = PlaybackPhase.TUNING
+
+        commands += startBatch()
+        return commands
     }
 
     /**
@@ -555,6 +647,8 @@ class PlaybackMachine(
         lastPosition = null
         candidates.clear()
         reserve.clear()
+        skipped.clear()
+        held = false
         winner = null
         // Everything reported from here on belongs to a playback that is over,
         // so the attempt those answers carry is no longer the one waited for.
