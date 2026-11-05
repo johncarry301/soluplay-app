@@ -86,14 +86,11 @@ television, with a drawn keyboard, a corner preview and a saved list. The
 gestures the plan named are rules in `core` rather than code in a surface,
 and the Bengali/English switch is remembered instead of resetting.
 
-## Phase 6 — `/tv` web layout · **code done, the device half open**
+## Phase 6 — `/tv` web layout · **withdrawn 2026-11-05**
 
 | # | Open | Who | Why it is open |
 |---|---|---|---|
-| 6.1 | ~~The ten-foot page for Tizen and webOS~~ **closed 2026-11-05** | — | Built in Phase 6 as `/tv` in `freetv`: the catalogue's own rails in the site's own order, a bar that is the first row of the walk, a drawn keyboard and a channel that takes the whole screen through the two existing players, unchanged. Additive only — no existing route was edited. |
-| 6.2 | ~~D-pad handling and no promos~~ **closed 2026-11-05** | — | The keys are read by their number before their name (the old engines do not always fill in `event.key`), the walk stops at the ends, empty rows are stepped over, and the column is clamped into the row it lands on. No app-download banner, no ticker, no fixture promo, no ad modal — the one guarded line in an existing file is the ad modal, whose Skip button is mouse-only. |
-| 6.3 | The old Samsung box | Owner | The only place this can be proved. Everything measured here was measured in a desktop browser at 1920 × 1080: the guide drew, the walk moved, the search ranked, the failure path took the channel off the guide. Whether an old box with a Chrome 38 engine reads the keys and shows the picture is a claim about hardware. |
-| 6.4 | The `/tv` route is not deployed | Owner | It is committed in the local `freetv` repository only — nothing pushed, nothing deployed, the live site untouched. §13 says every addition to `freetv` needs its own review first, so it waits for that review beside the three Phase 4 routes (4.2). |
+| — | **Nothing is owed.** The phase is withdrawn | — | The browser ten-foot page is removed: SoluPlay is distributed as the Android phone app and the Android TV app only (PLAN Amendment 16). The code was dropped from the local `freetv` repository — `main` is `6021d13` and `17d134c` ahead of `origin/main`, the tree is byte-identical to the commit before Phase 6, and the work is kept on the local branch `archive/tv-2026-11-05`, unpublished. The two gates of this phase — the old Samsung box (6.3) and the undeployed `/tv` route (6.4) — are void with the phase. |
 
 ---
 

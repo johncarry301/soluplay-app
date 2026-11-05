@@ -179,7 +179,7 @@ That was your stated reason for building a TV app, so it's a first-class feature
 | 3 | **Old-box TLS + resilience.** `ProviderTls` rebuild; multiple base URLs; last-good cache; seed catalogue | An aynaott/alixbd channel plays on an Android 9 box |
 | 4 | **Updater.** Manifest + bootstrap endpoints in `freetv`; check/download/sha256/install; staged %; kill switch; mandatory | A new build reaches a device with one tap |
 | 5 | **Polish.** Match board, favourites + sync, TV on-screen search, corner preview, gestures, Bengali/English | — |
-| 6 | **`/tv` web layout** in `freetv` for Tizen/webOS, D-pad handling, no promos | An old Samsung box gets a 10-foot page |
+| 6 | ~~**`/tv` web layout** in `freetv` for Tizen/webOS, D-pad handling, no promos~~ **withdrawn 2026-11-05** | — | Superseded by Amendment 16: the browser ten-foot page is removed. Distribution is the Android phone app and the Android TV app only. |
 
 **Split into two packages** (`com.soluplay.app` + `com.soluplay.tv`) when: you list on Play and want a dedicated TV section · you want both installed on one device · TV RAM/startup turns out to be a problem on old boxes · the two release cadences diverge. Until then, one APK.
 
@@ -1635,6 +1635,69 @@ The catalogue was read from the in-memory store and **nothing was written**:
 - *The `/tv` route is not deployed.* It is in the local `freetv` repository
   only. §13 says every addition to `freetv` needs its own review before it
   goes live, so it waits for that review beside the three Phase 4 routes.
+
+This pass is committed in the local repositories and **nothing was pushed,
+released or deployed**; no keystore was touched and the live site is
+untouched.
+
+### Amendment 16 — 2026-11-05, Phase 6 withdrawn: the browser ten-foot page is removed
+
+**The decision.** The browser interface is no longer part of the product.
+SoluPlay is distributed as the **Android phone app** and the **Android TV
+app** only, so the `/tv` web layout — the ten-foot page built for Tizen and
+webOS sets — is withdrawn and its code is removed from `freetv`. Amendment 15
+stays above as the record of what was built and measured; this amendment
+records why it is gone.
+
+**Why.** The page was built for boxes that run a browser and nothing else.
+Every one of those boxes is a television the app already reaches, and the
+app's own television surface — the focus grid, the drawn keyboard, the saved
+list, the ladder walk and the failover — is the same product without a second
+implementation to keep alive. One distribution means one set of rules.
+
+**What was removed** (in `freetv`, one commit, `ca57735`, 14 files):
+
+| Removed | What it was |
+|---|---|
+| `app/tv/page.tsx`, `app/tv/layout.tsx` | the route itself |
+| `components/tv/` (5 files) | bar, guide rows, channel tile, drawn keyboard, watch screen |
+| `lib/tvFocus.ts`, `lib/tvKeyboard.ts`, `lib/tvRows.ts` | the focus walk, the keyboard, the rails |
+| `tests/tvFocus.test.ts` (24 tests) | the twenty-four tests that held the walk's rules |
+| the `/tv` guard in `components/AdManager.tsx` | the ad modal's exception, which existed only for this page |
+| the `test:tv` script and four `tsconfig.tests.json` lines | the test wiring |
+
+The commit was dropped from `freetv`'s `main` — the branch is now
+`6021d13` and `17d134c` ahead of `origin/main`, and the tree is byte-identical
+to the commit before Phase 6. The work itself is kept on the local branch
+`archive/tv-2026-11-05`, so it is recoverable and can be read; it is not
+published.
+
+**What was not touched.** The two Phase 4 commits are exactly as they were,
+still unpushed and still awaiting their own review. The site's own behaviour
+is unchanged: the catalogue, the watch page, the players, the ranking, the
+server-provided ladder, the automatic failover, the admin gate and every
+existing route are as they were, and the ad modal is byte-identical to the
+published file — it simply has no `/tv` exception any more. The Android phone
+app and the **Android TV app** are untouched; they never used the web page.
+`lib/tvPolyfills.ts` stays, because the phone layout, the watch page and the
+admin dashboard have always used it.
+
+**The gate.**
+
+| Check | Result |
+|---|---|
+| `git diff 17d134c HEAD` | empty — the tree is the pre-Phase-6 tree |
+| `git status` | clean |
+| `npx tsc --noEmit` | clean |
+| `npm run test:all` | 184 tests, 0 failures (208 − the 24 `/tv` tests) |
+| `npm run build` | green — no `/tv` route in the output; the three `/api/app/*` routes are in it |
+| `data/store.json` | byte-identical (`28400f8f06888cdf9537681f4c75b60e6bfdbcc468f53d41eba3564ef28a4c2e`) |
+
+**Still open.** Unchanged by this amendment, and all of it still the owner's:
+the two Phase 4 routes are committed locally and wait for their review (4.2),
+the saved list cannot travel between two devices until that route is live
+(5.2), the release keystore passphrase is still wanted (Phase 0), and the
+device half of every phase is still the owner's.
 
 This pass is committed in the local repositories and **nothing was pushed,
 released or deployed**; no keystore was touched and the live site is
