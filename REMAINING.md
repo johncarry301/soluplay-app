@@ -142,6 +142,27 @@ manifest from this repository.
 
 Nothing else is needed for the manifest to become valid and reachable.
 
+## The first attempt, and the key it cost
+
+The first run of the release job failed at "Restore the release key", and the
+fault was in the workflow rather than in the secrets: `base64 --decode` reads
+its argument as a *file name*, so the job asked for a file whose name was the
+whole key. The error printed that argument back, which put the key in a public
+run log.
+
+Three things follow, and all three are done before any build is published:
+
+- The key is decoded from standard input now, so a failure cannot print it.
+- The key itself is replaced. Nothing has been published and no device has the
+  app yet, so a new key costs nothing, and a key that has been in a public log
+  should never sign a release. The replacement passphrase is long and mixed:
+  one character class is not enough to protect a key that can be published by
+  accident.
+- The logs of that run are deleted, so the copy of the key in them is gone.
+
+The tag `v0.2.0` was pushed once and the job failed on it, so the tag is moved
+to the commit that carries the fix rather than left pointing at the broken one.
+
 ## The rule behind the list
 
 - A phase is **not** done until its gate is measured, and a gate that needs a

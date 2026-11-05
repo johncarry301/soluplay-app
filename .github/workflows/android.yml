@@ -100,7 +100,14 @@ jobs:
             exit 1
           fi
           mkdir -p keystore
-          base64 --decode "$KEYSTORE_BASE64" > keystore/release.jks
+          # The key is piped in, never named. `base64 --decode "$VAR"` reads
+          # its argument as a file name, and when that fails the error prints
+          # the argument back — which would put the key in a public log.
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 --decode > keystore/release.jks
+          if [ ! -s keystore/release.jks ]; then
+            echo "The release key did not decode." >&2
+            exit 1
+          fi
           {
             echo "storeFile=keystore/release.jks"
             echo "storePassword=$KEYSTORE_PASSWORD"
