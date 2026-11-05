@@ -33,8 +33,8 @@ android {
         applicationId = "com.soluplay.app"
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
@@ -145,6 +145,26 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+/**
+ * The version of the build, written where the release job can read it.
+ *
+ * The manifest names the build that was published, so the job that publishes
+ * it has to know the version without being told twice: it reads the number
+ * that was compiled into the file rather than a copy of it that can drift.
+ */
+val versionInfoFile = layout.buildDirectory.file("version-info.json")
+
+tasks.register("writeVersionInfo") {
+    val code = android.defaultConfig.versionCode
+    val name = android.defaultConfig.versionName
+    outputs.file(versionInfoFile)
+    doLast {
+        versionInfoFile.get().asFile.writeText(
+            """{"versionCode":$code,"versionName":"$name"}"""
+        )
     }
 }
 

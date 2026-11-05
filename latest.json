@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
   "appId": "com.soluplay.app",
-  "versionCode": 1,
-  "versionName": "0.1.0",
-  "updatedAt": "2026-11-03T00:00:00Z",
-  "releaseNotes": "First public build.",
-  "apkUrl": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
-  "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
-  "fileName": "SoluPlay.apk",
+  "versionCode": 0,
+  "versionName": "",
+  "updatedAt": "",
+  "releaseNotes": "",
+  "apkUrl": "",
+  "downloadUrl": "",
+  "fileName": "",
   "sizeBytes": 0,
   "sha256": "",
   "mandatory": false,
-  "minSupportedVersionCode": 1,
+  "minSupportedVersionCode": 0,
   "rolloutPercent": 100,
   "android": {
     "packageName": "com.soluplay.app",
@@ -22,16 +22,16 @@
   "variants": {
     "phone": {
       "label": "Android Phone & Tablet",
-      "url": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
-      "fileName": "SoluPlay.apk",
+      "url": "",
+      "fileName": "",
       "sizeBytes": 0,
       "sha256": "",
       "minSdkVersion": 21
     },
     "tv": {
       "label": "Android TV & TV Boxes",
-      "url": "https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk",
-      "fileName": "SoluPlay.apk",
+      "url": "",
+      "fileName": "",
       "sizeBytes": 0,
       "sha256": "",
       "minSdkVersion": 21

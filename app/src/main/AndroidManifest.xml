@@ -7,6 +7,13 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!--
+        The app installs its own updates through the system's installer, and
+        the person is asked on the device to allow it. Without this the system
+        refuses the session and there is no update at all.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
         One APK serves both surfaces, so neither input may be required: a
         handset has no D-pad and a TV box has no touchscreen.
     -->
@@ -41,6 +48,14 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            The system's answer about an install. It is declared here so the
+            answer arrives even when the app is in the background.
+        -->
+        <receiver
+            android:name="com.soluplay.app.update.InstallResultReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

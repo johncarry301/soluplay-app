@@ -77,6 +77,8 @@ jobs:
           set -euo pipefail
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "KEYSTORE_BASE64 is not set on this repository." >&2
+            echo "A release is signed with the key in the repository secrets:" >&2
+            echo "  KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD" >&2
             exit 1
           fi
           mkdir -p keystore
@@ -89,8 +91,12 @@ jobs:
           } > keystore.properties
 
       - name: Build the signed APK
-        run: ./gradlew assemblePhoneRelease
+        run: ./gradlew writeVersionInfo assemblePhoneRelease
 
+      # One file is published, and it is the phone flavour: that build carries
+      # the television launcher as well, so one download covers a handset and
+      # a TV box. The tv flavour is built for the split described in PLAN.md
+      # section 12 and is not published until that split is real.
       - name: Name the asset and publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -100,8 +106,74 @@ jobs:
           cp app/build/outputs/apk/phone/release/app-phone-release.apk dist/SoluPlay.apk
           gh release create "$GITHUB_REF_NAME" dist/SoluPlay.apk --generate-notes
 
+      # The manifest is what the app reads, and its fingerprint is what the app
+      # checks the download against. Writing it by hand after a release is one
+      # more step where the number can be wrong, and a wrong number makes every
+      # device refuse the update. So the job that publishes the build writes
+      # the manifest too, from the bytes it has just published.
+      #
+      # Both variants are given the same file: the phone flavour carries the
+      # television launcher, so one download covers both surfaces until the
+      # split in PLAN.md section 12 is real.
+      - name: Publish the manifest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version_code=$(jq -r .versionCode app/build/version-info.json)
+          version_name=$(jq -r .versionName app/build/version-info.json)
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/SoluPlay.apk"
+          sha=$(sha256sum dist/SoluPlay.apk | cut -d' ' -f1)
+          size=$(stat -c%s dist/SoluPlay.apk)
+
+          if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "The fingerprint is not a sha256: $sha" >&2
+            exit 1
+          fi
+
+          jq \
+            --arg vn "$version_name" \
+            --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg url "$url" \
+            --arg sha "$sha" \
+            --argjson size "$size" \
+            --argjson vc "$version_code" \
+            '.versionCode = $vc
+             | .versionName = $vn
+             | .updatedAt = $now
+             | .releaseNotes = "SoluPlay " + $vn
+             | .apkUrl = $url
+             | .downloadUrl = $url
+             | .fileName = "SoluPlay.apk"
+             | .sha256 = $sha
+             | .sizeBytes = $size
+             | .variants.phone.url = $url
+             | .variants.phone.fileName = "SoluPlay.apk"
+             | .variants.phone.sha256 = $sha
+             | .variants.phone.sizeBytes = $size
+             | .variants.tv.url = $url
+             | .variants.tv.fileName = "SoluPlay.apk"
+             | .variants.tv.sha256 = $sha
+             | .variants.tv.sizeBytes = $size' \
+            latest.json > latest.json.new
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          # The commit is made on top of the branch as it is now, not on top
+          # of the tag: the branch may have moved on since the tag was cut,
+          # and a push from the tag would then be refused.
+          git fetch origin main
+          git checkout -B publish-manifest origin/main
+          mv latest.json.new latest.json
+          git add latest.json
+          git commit -m "Publish the manifest for $version_name"
+          git push origin publish-manifest:main
+
       - name: Summarise the release
         run: |
           set -euo pipefail
           sha256sum dist/SoluPlay.apk
           ls -l dist/SoluPlay.apk
+          cat app/build/version-info.json

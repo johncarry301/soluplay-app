@@ -2,7 +2,11 @@ package com.soluplay.app
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.os.Build
 import com.soluplay.app.net.TlsSetup
+import com.soluplay.app.update.ApkInstaller
+import com.soluplay.app.update.UpdateStore
+import com.soluplay.app.update.UpdateViewModelFactory
 import com.soluplay.core.api.CatalogueClient
 import com.soluplay.core.api.UrlConnectionTransport
 import com.soluplay.core.browse.CatalogueRepository
@@ -10,6 +14,8 @@ import com.soluplay.core.browse.SeedCatalogue
 import com.soluplay.core.browse.SeedProvider
 import com.soluplay.core.cache.FileCatalogueCache
 import com.soluplay.core.ui.LogoLoader
+import com.soluplay.core.update.ApkDownloader
+import com.soluplay.core.update.UpdateManifestClient
 import java.io.File
 import javax.net.ssl.SSLSocketFactory
 
@@ -29,6 +35,9 @@ object AppGraph {
 
     /** Where the copies of the channel logos are kept. */
     const val LOGO_CACHE_DIRECTORY = "logos"
+
+    /** Where a downloaded build is kept until it is installed. */
+    const val UPDATE_DIRECTORY = "updates"
 
     /** The secure context the repair is carried by, once it is installed. */
     @Volatile
@@ -57,6 +66,46 @@ object AppGraph {
     fun prepare(context: Context) {
         LogoLoader.useDiskCache(File(context.cacheDir, LOGO_CACHE_DIRECTORY))
         socketFactory = TlsSetup.install(context)
+    }
+
+    /**
+     * The updater, built out of the app's own parts.
+     *
+     * The manifest is asked for and the build is fetched over the same
+     * transport as the rest of the app's traffic, so both go through the
+     * certificate repair on a television whose trust store was never updated.
+     */
+    fun updater(context: Context): UpdateViewModelFactory {
+        val transport = transport()
+        return UpdateViewModelFactory(
+            manifestClient = UpdateManifestClient(transport = transport),
+            downloader = ApkDownloader(open = transport::openStream),
+            installer = ApkInstaller(context),
+            store = UpdateStore(context),
+            downloadDirectory = File(context.filesDir, UPDATE_DIRECTORY),
+            surface = surfaceOf(context),
+            currentVersionCode = versionCodeOf(context),
+        )
+    }
+
+    /**
+     * Which build of the app this is.
+     *
+     * The surface is the package, not the launcher: the shipped APK carries
+     * the television launcher as well, and it is the same file either way.
+     */
+    fun surfaceOf(context: Context): String =
+        if (context.packageName.endsWith(".tv")) "tv" else "phone"
+
+    /** The build number of the app that is running. */
+    private fun versionCodeOf(context: Context): Int {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode.toInt()
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode
+        }
     }
 }
 

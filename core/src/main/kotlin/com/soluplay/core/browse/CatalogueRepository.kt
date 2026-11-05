@@ -62,6 +62,9 @@ class CatalogueRepository(
     }
 
     private suspend fun loadLive(): LiveAttempt {
+        val bootstrap = loadBootstrap()
+        if (bootstrap != null) return bootstrap
+
         val channelsBody = try {
             source.channelsJson()
         } catch (error: Exception) {
@@ -90,6 +93,30 @@ class CatalogueRepository(
             snapshot = BrowseSnapshot(
                 channels = channels,
                 fixtures = fixtures,
+                origin = CatalogueOrigin.LIVE,
+                savedAt = now(),
+                siteReachable = true,
+            ),
+            siteReachable = true,
+        )
+    }
+
+    /**
+     * The one-body route, when the site has one.
+     *
+     * A site that does not have the route is not a failure — the two older
+     * routes carry the same guide, so the caller falls back to them.
+     */
+    private suspend fun loadBootstrap(): LiveAttempt? {
+        val body = runCatching { source.bootstrapJson() }.getOrNull() ?: return null
+        val guide = CatalogueBody.bootstrap(body) ?: return null
+
+        cache.write(body, if (guide.boardAvailable) body else null)
+
+        return LiveAttempt(
+            snapshot = BrowseSnapshot(
+                channels = guide.channels,
+                fixtures = guide.fixtures,
                 origin = CatalogueOrigin.LIVE,
                 savedAt = now(),
                 siteReachable = true,

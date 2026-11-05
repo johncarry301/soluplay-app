@@ -19,6 +19,15 @@ interface CatalogueSource {
      * the player may use: the saved copy and the baked seed have no ladder.
      */
     suspend fun channelJson(id: String): String
+
+    /**
+     * The guide and the board in one body, or null when the site has no such
+     * route.
+     *
+     * The default is null, so a source that only knows the older routes keeps
+     * working and the app falls back to them.
+     */
+    suspend fun bootstrapJson(): String? = null
 }
 
 /**
@@ -48,15 +57,40 @@ class CatalogueClient(
     override suspend fun channelJson(id: String): String =
         read(ApiConfig.channelUrl(id)) { CatalogueBody.channel(it) != null }
 
+    /**
+     * The one-body route, or null when no address has it.
+     *
+     * A site without the route is not a failure: the guide is still there in
+     * the two older routes, so the caller falls back to them.
+     */
+    override suspend fun bootstrapJson(): String? =
+        attempt(ApiConfig.BOOTSTRAP_PATH) { CatalogueBody.bootstrap(it) != null }.body
+
     private suspend fun read(path: String, usable: (String) -> Boolean): String {
         if (addresses.isEmpty()) throw IOException("no base address is configured")
+
+        val outcome = attempt(path, usable)
+        outcome.body?.let { return it }
+
+        val failure = outcome.failure ?: IOException("no base address answered")
+
+        // The site was reached but had nothing to give — a different thing from
+        // the site not answering at all, and the screen says which one it was.
+        if (outcome.answered && failure !is SiteAnsweredException) {
+            throw UnusableAnswerException("$path could not be read from any address")
+        }
+        throw failure
+    }
+
+    private suspend fun attempt(path: String, usable: (String) -> Boolean): Attempt {
+        if (addresses.isEmpty()) return Attempt(body = null, failure = null, answered = false)
 
         var failure: IOException? = null
         var answered = false
         for (address in addresses) {
             try {
                 val body = transport.get(address.trimEnd('/') + path)
-                if (usable(body)) return body
+                if (usable(body)) return Attempt(body = body, failure = null, answered = answered)
                 answered = true
                 failure = UnusableAnswerException("$path answered with a body that is not a guide")
             } catch (error: SiteAnsweredException) {
@@ -67,11 +101,13 @@ class CatalogueClient(
             }
         }
 
-        // The site was reached but had nothing to give — a different thing from
-        // the site not answering at all, and the screen says which one it was.
-        if (answered && failure !is SiteAnsweredException) {
-            throw UnusableAnswerException("$path could not be read from any address")
-        }
-        throw failure ?: IOException("no base address answered")
+        return Attempt(body = null, failure = failure, answered = answered)
     }
 }
+
+/** What one attempt at a route produced. */
+private class Attempt(
+    val body: String?,
+    val failure: IOException?,
+    val answered: Boolean,
+)

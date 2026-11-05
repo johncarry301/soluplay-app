@@ -3,6 +3,7 @@ package com.soluplay.core.api
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
@@ -112,6 +113,31 @@ class UrlConnectionTransport(
     private fun secureContext(connection: HttpURLConnection) {
         val factory = sslSocketFactory ?: return
         if (connection is HttpsURLConnection) connection.sslSocketFactory = factory
+    }
+
+    /**
+     * Opens a stream to an address, with this transport's secure context.
+     *
+     * A file that is fetched rather than read as a body — a build to install —
+     * is opened this way, so it goes through the same repair as everything
+     * else. A television whose trust store was never updated could read the
+     * manifest and then fail to fetch the file that carries the repair.
+     */
+    fun openStream(url: String): InputStream {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = connectTimeoutMs
+        connection.readTimeout = readTimeoutMs
+        connection.setRequestProperty("Accept", "*/*")
+        connection.setRequestProperty("User-Agent", USER_AGENT)
+        secureContext(connection)
+
+        val status = connection.responseCode
+        if (status !in 200..299) {
+            connection.disconnect()
+            throw HttpStatusException(status, "")
+        }
+        return connection.inputStream
     }
 
     companion object {

@@ -95,4 +95,50 @@ object Copy {
     )
 
     @Composable fun close() = text("বন্ধ", "Close")
+
+    @Composable fun newVersion(name: String) = text("নতুন সংস্করণ $name", "New version $name")
+
+    @Composable fun updateRequired() = text(
+        "নতুন সংস্করণ ইনস্টল করা জরুরি",
+        "A new version has to be installed",
+    )
+
+    @Composable fun updateRequiredBody() = text(
+        "এই সংস্করণ আর খেলতে পারবে না। নতুন সংস্করণটি ইনস্টল করুন।",
+        "This version can no longer play. Install the new one.",
+    )
+
+    @Composable fun updateMandatoryBody() = text(
+        "এই আপডেটটি এখন আবশ্যক। নতুন সংস্করণটি ইনস্টল করুন।",
+        "This update is now required. Install the new version.",
+    )
+
+    @Composable fun updateAvailableBody() = text(
+        "নতুন সংস্করণটি ইনস্টল করা যাচ্ছে।",
+        "A new version can be installed.",
+    )
+
+    @Composable fun installNow() = text("এখনই ইনস্টল করুন", "Install now")
+
+    @Composable fun allowInstall() = text("ইনস্টলের অনুমতি দিন", "Allow installation")
+
+    @Composable fun later() = text("পরে", "Later")
+
+    @Composable fun downloadingUpdate() = text("ডাউনলোড হচ্ছে…", "Downloading…")
+
+    @Composable fun installingUpdate() = text("ইনস্টল হচ্ছে…", "Installing…")
+
+    @Composable fun readyToInstall() = text("ইনস্টলের জন্য প্রস্তুত", "Ready to install")
+
+    @Composable fun updateFailed() = text(
+        "আপডেটটি নামানো যায়নি।",
+        "The update could not be downloaded.",
+    )
+
+    @Composable fun updatePermissionNeeded() = text(
+        "এই ডিভাইসে অ্যাপ ইনস্টল করার অনুমতি দিতে হবে।",
+        "This device has to allow the app to install updates.",
+    )
+
+    @Composable fun tryAgain() = text("আবার চেষ্টা করুন", "Try again")
 }

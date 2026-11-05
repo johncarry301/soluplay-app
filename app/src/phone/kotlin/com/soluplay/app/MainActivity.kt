@@ -4,12 +4,25 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.soluplay.app.player.Media3PlaybackHost
 import com.soluplay.app.ui.SoluPlayTheme
+import com.soluplay.app.update.ApkInstaller
+import com.soluplay.app.update.UpdateViewModel
 import com.soluplay.core.browse.BrowseViewModel
 import com.soluplay.core.browse.BrowseViewModelFactory
 import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.player.PlaybackViewModelFactory
+import com.soluplay.core.ui.Background
+import com.soluplay.core.ui.UpdateBlockPanel
+import com.soluplay.core.ui.UpdateSheet
+import com.soluplay.core.update.UpdateState
 import com.soluplay.phone.PhoneHomeScreen
 
 /**
@@ -37,17 +50,64 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /** The updater, which asks the site whether there is a newer build. */
+    private val updateViewModel: UpdateViewModel by viewModels {
+        AppGraph.updater(applicationContext)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppGraph.prepare(applicationContext)
         setContent {
             SoluPlayTheme {
-                PhoneHomeScreen(
-                    viewModel = browseViewModel,
-                    playback = playbackViewModel,
-                    host = host,
-                )
+                val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+
+                Surface(color = Background, modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        val blocked = updateState as? UpdateState.Blocked
+                        if (blocked != null) {
+                            // A build that may not play is not shown the
+                            // guide: there is nothing on it that works.
+                            UpdateBlockPanel(
+                                state = blocked,
+                                onInstall = { updateViewModel.install() },
+                                onAllowInstall = { allowInstall() },
+                            )
+                        } else {
+                            PhoneHomeScreen(
+                                viewModel = browseViewModel,
+                                playback = playbackViewModel,
+                                host = host,
+                            )
+                        }
+
+                        UpdateSheet(
+                            state = updateState,
+                            alignment = Alignment.BottomCenter,
+                            onInstall = { updateViewModel.install() },
+                            onAllowInstall = { allowInstall() },
+                            onLater = { updateViewModel.dismiss() },
+                            onRetry = { updateViewModel.check(force = true) },
+                        )
+                    }
+                }
             }
         }
+    }
+
+    /**
+     * The manifest is asked for when the app comes forward.
+     *
+     * The ask is throttled inside the updater, so coming back to the app ten
+     * times in a day is one fetch, not ten.
+     */
+    override fun onResume() {
+        super.onResume()
+        updateViewModel.check()
+    }
+
+    /** The screen where the owner lets this app install its own updates. */
+    private fun allowInstall() {
+        startActivity(ApkInstaller(applicationContext).permissionIntent())
     }
 }

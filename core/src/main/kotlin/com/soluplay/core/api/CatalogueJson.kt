@@ -33,6 +33,24 @@ data class FixturesEnvelope(
     val fixtures: List<Fixture> = emptyList(),
 )
 
+/**
+ * The body the bootstrap route answers with: the guide and the board in one
+ * round trip.
+ *
+ * The board is the optional part. When the board route could not be read the
+ * route answers with an empty board and says so, so a board saved on another
+ * day is not thrown away by a failure.
+ */
+@Serializable
+data class BootstrapEnvelope(
+    val success: Boolean = false,
+    val count: Int = 0,
+    val channels: List<Channel> = emptyList(),
+    val fixtures: List<Fixture> = emptyList(),
+    val fixturesAvailable: Boolean = true,
+    val updatedAt: String = "",
+)
+
 @Serializable
 data class YouTubeResolveEnvelope(
     val success: Boolean = false,
@@ -113,4 +131,30 @@ object CatalogueBody {
         if (!envelope.success) return null
         return envelope.channel
     }
+
+    /**
+     * The guide and the board a bootstrap body carries, or null when it is
+     * not a usable bootstrap.
+     */
+    fun bootstrap(body: String?): BootstrapGuide? {
+        if (body.isNullOrBlank()) return null
+        val envelope = runCatching {
+            SoluPlayJson.json.decodeFromString(BootstrapEnvelope.serializer(), body)
+        }.getOrNull() ?: return null
+
+        if (!envelope.success) return null
+        if (envelope.channels.isEmpty()) return null
+        return BootstrapGuide(
+            channels = envelope.channels,
+            fixtures = envelope.fixtures,
+            boardAvailable = envelope.fixturesAvailable,
+        )
+    }
 }
+
+/** What a bootstrap body is worth: the guide, the board, and whether the board was read. */
+data class BootstrapGuide(
+    val channels: List<Channel>,
+    val fixtures: List<Fixture>,
+    val boardAvailable: Boolean,
+)

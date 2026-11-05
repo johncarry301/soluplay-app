@@ -58,7 +58,9 @@ Compose BOM 2024.12.01, Media3 1.4.1, min SDK 21, target SDK 34.
 | --- | --- |
 | 0 — spec, skeleton, CI | Done. Both launchers, offline build, lint clean, unit tests green. |
 | 1 — browse | Done. The live catalogue, the match board, the phone grid, the TV focus grid, the offline cache and the site-down mode. |
-| 2 — playback | Not started. |
+| 2 — playback | Done. The playback state machine, the detail fetch, the Media3 host, the phone and TV watch surfaces, and the YouTube Live player. |
+| 3 — old boxes | Done. The bundled CA roots and the certificate repair, so a television whose trust store was never updated still plays. |
+| 4 — the updater | Code done, device half open. The app can fetch a manifest, download a build, check its fingerprint and hand it to the system installer. |
 
 Phase 1 reads the live site through the app's own client, falls back to the
 copy the device saved, and falls back again to the copy baked into the APK.
@@ -107,9 +109,10 @@ in a password manager.** Without both, no further update can ever be signed.
 request: unit tests, lint for both flavours, and the debug APKs, with the phone
 APK uploaded as a build artifact.
 
-Pushing a `v*` tag additionally builds the signed release APK and attaches it
-to a GitHub Release as `SoluPlay.apk`. That job needs four repository secrets,
-none of which exist yet:
+Pushing a `v*` tag additionally builds the signed release APK, attaches it to
+a GitHub Release as `SoluPlay.apk`, and writes the manifest from the bytes it
+has just published. That job needs four repository secrets, none of which
+exist yet:
 
 | Secret | Meaning |
 | --- | --- |
@@ -117,6 +120,10 @@ none of which exist yet:
 | `KEYSTORE_PASSWORD` | The keystore password |
 | `KEY_ALIAS` | The key alias |
 | `KEY_PASSWORD` | The key password |
+
+The job refuses to publish without them: a build that is not signed with the
+release key cannot be installed over the build that was, and a device that
+refuses the update is worse than a device that was never offered one.
 
 A manual release on your own machine stays supported, so a bad CI day cannot
 block a release.
@@ -139,59 +146,85 @@ new release shows up within seconds of the file being committed.
 | --- | --- |
 | `schemaVersion` | Manifest format version. Bump only if the shape changes. |
 | `appId` | Application id, also the future updater's identity check. |
-| `versionCode` | Monotonically increasing integer. The future updater compares this. |
+| `versionCode` | Monotonically increasing integer. The updater compares this. |
 | `versionName` | Human version, e.g. `1.2.0`. Shown on the download page. |
 | `updatedAt` | ISO-8601 timestamp of the release. |
 | `releaseNotes` | Short release note text. |
-| `downloadUrl` | Direct release-asset URL for the combined APK. |
+| `apkUrl` | Direct release-asset URL for the phone build. |
+| `downloadUrl` | The same URL under the other name; both are read. |
 | `fileName` | File name the visitor's browser should save. |
 | `sizeBytes` | Exact size of the APK in bytes. `0` hides the size on the page. |
-| `sha256` | SHA-256 of the APK. A future in-app updater verifies this. |
+| `sha256` | SHA-256 of the APK. The updater verifies the download against this. |
+| `mandatory` | `true` asks the device for the update; after a day of asking, it stops playing. |
+| `minSupportedVersionCode` | The oldest build that may still play. Raise it to retire a build. |
+| `rolloutPercent` | The share of installs the release is offered to, `1`–`100`. |
 | `android.minSdkVersion` | Lowest supported API level. |
 | `android.minAndroidVersion` | Lowest Android version shown to visitors, e.g. `5.0`. |
 | `android.targetSdkVersion` | API level the build targets. |
 | `variants.phone` | Download entry for phones and tablets. |
 | `variants.tv` | Download entry for Android TV and TV boxes. |
 
+Each variant carries its own `url`, `fileName`, `sizeBytes`, `sha256` and
+`minSdkVersion`, so a device is offered the file that belongs to the surface
+it is on. Today both variants name the same file, because the phone flavour
+carries the television launcher as well; the split writes a second file into
+the `tv` variant and nothing else changes.
+
 `variants.<id>.url` is a **direct asset URL**, never a release webpage:
 
 ```
-https://github.com/johncarry301/soluplay-app/releases/latest/download/SoluPlay.apk
+https://github.com/johncarry301/soluplay-app/releases/download/v0.2.0/SoluPlay.apk
 ```
 
-The `latest` path always points at the newest published release, so a new
-release needs no change in this file for the URL to stay correct — only
-`versionCode`, `versionName`, `sizeBytes`, `sha256` and the notes do.
+The publishing job writes the tag-scoped URL of the release it has just made,
+so the address always names the file it was written for.
 
-### One APK, then two
+### The three switches
 
-While the phone and TV builds are the same file, both variants point at the
-same URL. When the flavors split, give each variant its own asset name and URL
-and the page follows automatically — no change to the website.
+Three fields turn a release on and off without touching the app:
+
+- `versionCode` — the build on offer. Point it back at the previous build and
+  no device is offered the newer one.
+- `minSupportedVersionCode` — the oldest build that may still play. Raise it
+  and every device below it is retired and must take the update.
+- `rolloutPercent` — the share of installs the release reaches, bucketed by
+  the install id, so the same device is always in the same bucket and a
+  release grown from ten percent to fifty reaches exactly the devices that
+  were already in it.
 
 ## Publishing a new release
 
-1. Build the APK and upload it as a release asset named `SoluPlay.apk`
-   (or one file per variant when they split). The release must be **public**,
-   otherwise the download returns 404.
-2. Fill in the manifest and commit it:
+The publishing job does it, so the release is one tag:
 
-   ```powershell
-   $apk = "C:\path\to\SoluPlay.apk"
-   (Get-Item $apk).Length
-   (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
-   ```
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
 
-   Put the size in `sizeBytes` and the hash in `sha256`, bump `versionCode`
-   and `versionName`, set `updatedAt`, and write the notes.
-3. Commit and push `latest.json` to `main`.
+The job then builds the release APK, publishes it as `SoluPlay.apk`, and
+writes `latest.json` from the bytes it published — the size and the SHA-256
+are read off the file, never typed in. The manifest is committed back to
+`main` by the same job.
 
-The download page then shows the new version and hands out the new file. The
-website is never rebuilt and redeployed for this.
+The version number lives in `app/build.gradle.kts` (`versionCode` and
+`versionName`); the tag and the two must agree, because the app compares the
+`versionCode` in the manifest with the one it is running.
+
+### The same key, always
+
+A build can only be installed over a build signed with the **same key**. The
+first release therefore has to be installed from scratch, and every release
+after it must be signed with the keystore that signed the first one. A lost
+keystore ends updates for every device that has the app; it does not end
+installs.
 
 ## While no APK is published
 
-`sizeBytes` may stay `0` and `sha256` empty — the page simply omits the size.
-Do not publish the manifest before the release asset exists: a manifest with a
-live URL but no asset behind it gives visitors a 404 instead of the page's
-"link will be available soon" notice.
+The manifest names no build: `versionCode` is `0`, the version name is empty
+and no URL is filled in. The download page shows its "link will be available
+soon" notice and the app is offered nothing, so neither of them points at a
+file that is not there.
+
+A manifest with a live URL and no asset behind it is the one thing to avoid:
+it gives visitors a 404 instead of the notice, and it makes every device try
+to download a file that does not exist.

@@ -1173,3 +1173,216 @@ a refusal to the screen and on to the next mirror, and one live harness.
 
 Nothing in this pass was committed, pushed, released or deployed, and no
 keystore was touched. The working tree holds the changes for review.
+
+### Amendment 13 — 2026-11-05, Phase 4: the app that can install the next version of itself
+
+A television box in a living room does not open the web app to notice that a
+new build exists. It has to be told. Phase 4 is the telling: the app asks the
+site what the newest build is, decides for itself whether that build is for
+this device, downloads it, checks it, and hands it to the system installer.
+Its gate is *"a new build reaches a device with one tap"* — which is half a
+statement about code and half a statement about a device, and the code half is
+written below while the device half is named at the end.
+
+**The decisions are pure, and they live in `core`.**
+
+- *The offer.* `UpdatePolicy.offerOf` reads the manifest and hands back the
+  build for **this surface**: the phone build on a phone and the television
+  build on a television, chosen from the manifest's `variants` and not by
+  guessing. A manifest with no build number in it is not an offer.
+- *Staged rollout.* The share of installs a release is for is a hundred
+  buckets, and an install lands in one of them by an id of its own
+  (`UpdatePolicy.bucketOf`). The same device is always in the same bucket, so
+  a release that grows from ten per cent to fifty reaches **exactly the
+  devices that were already in it** and no others.
+- *The kill switch.* Pointing the manifest back at the previous build is
+  enough: an offer that is not newer than the running build is nothing at all.
+- *The mandatory flag.* A mandatory update does **not** stop the app the
+  minute it appears — that reads as a broken app. The device is given a day
+  (`MANDATORY_GRACE_MS`), the moment the build was **first offered to that
+  device** is remembered per version number, and after the grace the app
+  stops.
+- *Retiring a build.* `minSupportedVersionCode` names the oldest build that
+  may still play. A device below it is stopped at once, with no grace, because
+  the build it is running has been withdrawn.
+
+**The download is checked before it is installed.**
+
+- The bytes are written into `<name>.part` and the **sha256 is computed while
+  they are being written**. Only a digest that matches the manifest is moved
+  into place; a mismatch, or a failure, deletes the part file and the app says
+  the update could not be downloaded.
+- **A manifest with no fingerprint is refused outright.** An update that
+  cannot be checked is not an update, and the refusal is its own reason
+  (`NO_FINGERPRINT`) rather than a download that quietly failed.
+- The downloader asks for **no credentials and no provider headers**. The APK
+  is a public GitHub Releases asset.
+- **The file is fetched over the app's own repaired transport.** A television
+  whose trust store was never updated could read the manifest and then fail to
+  fetch the file that carries the repair, so the download is opened with the
+  same secure context as everything else the app reaches.
+
+**The install is handed to the system, and the system is asked back.**
+
+- The APK is installed with a `PackageInstaller` session
+  (`MODE_FULL_INSTALL`): the file is written into the session, `fsync` is
+  called, and the session is committed with an `IntentSender`. The legacy
+  `commit(Intent)` form — taken out of the platform in Android 10 — is called
+  reflectively for the old boxes and nowhere else.
+- The result comes back through a **manifest-declared receiver**
+  (`InstallResultReceiver`), because the system instantiates the receiver, not
+  the app. The result is published through a flow the ViewModel is listening
+  to; a failure that came back from the installer is a failure the viewer is
+  told about.
+- `REQUEST_INSTALL_PACKAGES` is declared, and a device that has not allowed
+  this app to install packages is sent to the system's own
+  *install unknown apps* screen. **The downloaded file is kept**, so the second
+  press installs without downloading again.
+
+**The screen is honest about where the app is in the update.**
+
+- A new build is offered in a **sheet**: the version, the release notes, and
+  *Install now* / *Later*. *Later* is only offered while the update is still
+  optional.
+- A **blocked** build — a retired one, or a mandatory update past its grace —
+  does not get a sheet. It gets a **panel that replaces the home screen**, so
+  the guide is never composed and no channel can be opened. The playback
+  machine is not touched, and the Direct HLS and Secured separation is not
+  touched: the app simply stops being a player until it is updated.
+- Every word of it is in **Bengali and English** (`core/ui/Copy.kt`), in both
+  the phone and the television sizes — the television sheet is the same sheet
+  at a larger scale, not a second design.
+
+**One round trip for the guide and the board.**
+
+- The app now asks `/api/app/bootstrap` first: the catalogue and the match
+  board in one body, so the guide on the screen and the board on the screen
+  are the same pair of answers instead of two reads taken minutes apart.
+- **A site without that route is not a failure.** The app falls back to the
+  two routes it already used (`/api/channels`, `/api/fixtures`), and behaves
+  exactly as it did before — which matters, because the route does not exist
+  on the live site yet.
+- A board that could not be read is **said so** in the bootstrap body
+  (`fixturesAvailable`), so the board saved on the device is not overwritten by
+  an empty board.
+
+**The two routes in `freetv`, written but not deployed.**
+
+| Route | What it does | Where it lives |
+|---|---|---|
+| `/api/app/version` | Serves the release manifest verbatim, from the site's own copy or from the GitHub raw mirror, with the last copy kept when the address does not answer | `lib/appRelease.ts`, `app/api/app/version/route.ts` |
+| `/api/app/bootstrap` | The catalogue and the board in one body, read from the two existing routes on the server | `app/api/app/bootstrap/route.ts` |
+
+Neither route changes an existing route. `/api/channels` and `/api/fixtures`
+are read as they were, and the bootstrap route calls them rather than
+duplicating their queries. **Both are committed in the local `freetv`
+repository only** — nothing was pushed, nothing was deployed, and the live site
+is untouched — because §13 says every addition to `freetv` needs its own review
+first.
+
+**The release path: one tag, and the manifest writes itself.**
+
+- The release job builds the signed phone flavour, publishes it as
+  `SoluPlay.apk`, and **writes `latest.json` from the bytes it has just
+  published**: the size is read off the file and the fingerprint is
+  `sha256sum`ed from it. A number typed by hand is a number that can be wrong,
+  and a wrong fingerprint makes every device refuse the update.
+- **One file, two variants.** The published file is the phone flavour, which
+  carries the television launcher as well, so one download covers a handset and
+  a TV box. Both manifest variants are given the same file, and the split in
+  §12 writes a second file into the `tv` variant and changes nothing else.
+- **Before the first release the manifest names no build**: `versionCode` is
+  `0`, the version name is empty and no URL is filled in. The download page
+  shows its *"link will be available soon"* notice and the app is offered
+  nothing, so neither of them points at a file that is not there. A test reads
+  the real file in this repository and proves that it is inert.
+- The job commits the manifest back to `main` **on top of the branch as it is
+  at that moment**, not on top of the tag, so a branch that moved on while the
+  release was building does not refuse the push.
+- The job **refuses to publish without the four secrets**, because a build
+  that is not signed with the release key cannot be installed over the build
+  that was.
+
+**The manifest mirror does not exist yet.** `johncarry301/soluplay-app` is
+public and **empty**: it has no commits and no releases, so
+`https://raw.githubusercontent.com/johncarry301/soluplay-app/main/latest.json`
+answers 404 and the app's mirror read falls over. Not one of this repository's
+commits has ever been pushed. Until the repository is pushed there is no
+manifest for the app to read and no release for the page to offer.
+
+**§14.2 is closed.** The download button on the site points at the live
+landing page, `https://soluplay-download.vercel.app` (FreeTV `59b2ea3`), and
+the landing page reads the manifest from this repository — so the address
+never has to change again, and a new release needs no website change at all.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours built, **231
+unit tests per suite** (phone debug, phone release, TV debug, TV release),
+**no failures**, **4 skipped** — the live harnesses, which only run when they
+are asked for. **Thirty-nine of the tests are new in this phase**: fourteen
+that decide an update (the variant for the surface wins, a manifest with
+nothing in it, only a newer build is taken, the same install lands in the same
+bucket every time, a staged release reaches only its share, a growing release
+reaches the installs it already had, a retired build stops the app at once, a
+mandatory update is given a day, an optional update never stops the app);
+six that read the manifest (the site is asked first and the mirror is not
+asked at all, an address that answers with rubbish is passed over, no address
+answering is no update and not a failure); six that download (a matching
+fingerprint is kept, a mismatched one is thrown away, a manifest with no
+fingerprint is refused, a fingerprint that is not a fingerprint is refused, a
+failed download is a failure and not an empty build); nine that make the
+bootstrap route work and fall back when it is not there; and four that tie
+this repository's own `latest.json` to the updater (the published file parses
+into the updater's model, it names no build before the first release, the
+document the publishing job writes is the one the app reads, and a device on
+the older build is offered the new one while a device already on it is not).
+
+**The build number is now 2.** The updater compares build numbers, so the
+first published release has to be newer than anything that is already
+installed; `versionCode` is 2 and `versionName` is `0.2.0`.
+
+The APKs are in `artifacts/phase4-updater/`, signed with the debug key (the
+release keystore is still open — §0.1), carrying the new permission and the
+new receiver:
+
+| Artifact | sha256 |
+|---|---|
+| `SoluPlay-Phase4-Updater-phone-debug-0.2.0.apk` | `a7e6c8f77c40c74a383d244b21e7d99df8d34c4af89e3f01603d7b340a29f096` |
+| `SoluPlay-Phase4-Updater-tv-debug-0.2.0.apk` | `0036def0fbfa31103c07eaa202c20df5d8de50baf650fdaa0253b739d1e79a26` |
+
+Both are signed with the same debug certificate
+(`12e85bad1887edc2c4a9215658b5ef54978c1eec05bb757b1675137fcfba4153`), so one
+can be installed over the other — which is how the update path can be walked
+on a device before the release key exists. The phone build is
+`com.soluplay.app` and the television build `com.soluplay.tv`, both at build
+number 2.
+
+**Still open.**
+
+- *The two `freetv` routes are not live.* They are written and reviewed here
+  but not deployed, so the app today reads the manifest from the GitHub mirror
+  and the guide from the two older routes. Each route needs its own review
+  before it goes live.
+- *The repository has never been pushed.* `johncarry301/soluplay-app` is empty
+  on GitHub, so the manifest mirror answers 404 and there is no release for the
+  download page to offer. Pushing the repository is the owner's word to give,
+  and it is the first thing that has to happen for the manifest chain to exist
+  at all.
+- *The release job has never run a release.* It needs the four secrets
+  (§0.1) and a `v*` tag. What it then does is written down above and proved
+  by the shape test, but the job itself has never been executed against a
+  signed build.
+- *A real build to update to.* The updater can be proved against a manifest,
+  but "a new build reaches a device with one tap" needs a real
+  `SoluPlay.apk` in GitHub Releases and a device to install it on. **The APK
+  in the manifest must be signed with the same key as the installed app** —
+  a debug-signed build cannot be replaced by a release-signed one, and the
+  system will refuse it. The release keystore (§0.1) is therefore on the path
+  to the first real update, not only on the path to the store listing.
+- *The install prompt on a real box.* The `PackageInstaller` path, the
+  *install unknown apps* permission, and the prompt itself can only be seen on
+  a device. What the device has to show: a new version offered, one press, and
+  the app replaced by the build that was offered.
+
+This pass is committed in the local repository and **nothing was pushed,
+released or deployed**; no keystore was touched. The working tree holds the
+changes for review.
