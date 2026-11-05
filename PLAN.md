@@ -40,7 +40,7 @@ SoluPlay-App/                    ← new repo: sulayman-a-khan/soluplay-app (pub
 - **Ship one APK first** — a single build declaring both `LAUNCHER` and `LEANBACK_LAUNCHER`. Split into two flavors only on a trigger (§12).
 - Kotlin + Jetpack Compose, `minSdk 21`, `compile/target 34`, Gradle 8.9 — matching the toolchain already on your PC.
 - **Media3 ExoPlayer 1.4.1** — the version proven in the old app and present in your warm Gradle cache. A newer1.6.x needs a network fetch, which the offline `--offline` build forbids.
-- **Phase 0 must inventory `C:\Users\sahil\.gradle\caches\8.9` first** and pin every dependency to a version already cached. Anything missing = no offline build = the whole toolchain assumption breaks.
+- **Phase 0 must inventory `~/.gradle/caches/8.9` first** and pin every dependency to a version already cached. Anything missing = no offline build = the whole toolchain assumption breaks.
 
 ## 2. Data contract
 
@@ -1702,4 +1702,38 @@ device half of every phase is still the owner's.
 This pass is committed in the local repositories and **nothing was pushed,
 released or deployed**; no keystore was touched and the live site is
 untouched.
+
+### Amendment 17 — 2026-11-05, the release path is made publishable
+
+**What changed.** The path that publishes the build and writes the manifest
+was read end to end before this repository goes public, and four things were
+hardened. The release itself is unchanged: the same job still publishes the
+same asset and writes the same manifest.
+
+| Change | Why |
+|---|---|
+| The Android SDK is installed by name in both jobs (`platforms;android-34`, `build-tools;34.0.0`) | The build took whatever the runner image happened to carry, so a change in the image could have changed the build. |
+| `gradle-wrapper.properties` carries `distributionSha256Sum` | The wrapper jar was validated by the CI action; the Gradle distribution itself was not pinned to a checksum. |
+| `scripts/build.sh` and `scripts/create-release-keystore.sh` derive the toolchain from the account's home folder | The account's name was written into two files that are about to be public. |
+| `REMAINING.md` carries the true commit count and the publication steps | The list of what is owed should be the truth on the day it is read. |
+
+**The gate.** The release job's paths were checked against the build rather
+than assumed: the flavour's output
+(`app/build/outputs/apk/phone/release/app-phone-release.apk`), the version
+file (`app/build/version-info.json`), the keystore paths (the repository root,
+read by `rootProject.file`) and the manifest's `jq` program, whose output was
+produced and parsed. The git sequence the job uses to write the manifest into
+`main` was run in a scratch copy of this repository, so that step is known to
+work rather than assumed to.
+
+**What was not touched.** The app code, the release job's steps, the manifest
+format and the phases themselves: the release path is the same path with its
+sharp edges filed. The release key was not created and no secret was
+changed — the passphrase is still the owner's.
+
+**Still open.** Everything in `REMAINING.md` is still open: the four secrets,
+the first push, the `v0.2.0` tag, and the device half of every phase.
+
+This pass is committed in the local repository and **nothing was pushed,
+released or deployed**; no keystore was touched.
 

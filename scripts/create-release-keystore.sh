@@ -27,7 +27,10 @@ fi
 
 export SOLUPLAY_KEYSTORE_PASSWORD
 
-JAVA_HOME="${JAVA_HOME:-C:/Users/sahil/android-tv-toolchain/jdk17/jdk-17.0.20.1+1}"
+# The toolchain lives in the account's home folder. The account's name is not
+# written into this file, so the repository can be public.
+USER_HOME="${USERPROFILE:-$HOME}"
+JAVA_HOME="${JAVA_HOME:-$USER_HOME/android-tv-toolchain/jdk17/jdk-17.0.20.1+1}"
 KEYTOOL="$JAVA_HOME/bin/keytool"
 if [ ! -x "$KEYTOOL" ] && [ ! -f "$KEYTOOL.exe" ]; then
   echo "keytool not found at $KEYTOOL. Set JAVA_HOME to the JDK 17 folder." >&2

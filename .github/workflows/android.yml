@@ -24,6 +24,15 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # The SDK is not taken from whatever the runner image happens to carry:
+      # the platform and the build tools the build asks for are named here, so
+      # a change in the image cannot quietly change the build.
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
+          accept-android-sdk-licenses: true
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
@@ -61,6 +70,15 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      # The same SDK the build job used, named rather than inherited: a release
+      # must not be signed by a build made with a different toolchain than the
+      # one that was tested.
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
+          accept-android-sdk-licenses: true
 
       - uses: gradle/actions/setup-gradle@v4
 

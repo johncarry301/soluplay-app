@@ -15,8 +15,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-export JAVA_HOME="${JAVA_HOME:-C:/Users/sahil/android-tv-toolchain/jdk17/jdk-17.0.20.1+1}"
-export ANDROID_HOME="${ANDROID_HOME:-C:/Users/sahil/android-tv-toolchain/sdk}"
+# The toolchain lives in the account's home folder. The account's name is not
+# written into this file, so the repository can be public.
+USER_HOME="${USERPROFILE:-$HOME}"
+export JAVA_HOME="${JAVA_HOME:-$USER_HOME/android-tv-toolchain/jdk17/jdk-17.0.20.1+1}"
+export ANDROID_HOME="${ANDROID_HOME:-$USER_HOME/android-tv-toolchain/sdk}"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 
 OFFLINE="--offline"

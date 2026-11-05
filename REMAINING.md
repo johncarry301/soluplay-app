@@ -54,7 +54,7 @@ or a phase that has not been started.
 |---|---|---|---|
 | 4.1 | The gate on a device | Owner | The code half of the gate is measured — 280 unit tests per suite, both debug flavours built. *"A new build reaches a device with one tap"* needs a handset and a box, and there is neither attached to this PC. |
 | 4.2 | The three FreeTV routes are not deployed | Owner | `/api/app/version`, `/api/app/bootstrap` and `/api/app/favourites` are committed in the local `freetv` repository only — nothing pushed, nothing deployed, the live site untouched. §13 says every addition to `freetv` needs its own review first, so they wait for that review. Until then the app reads the manifest from the GitHub mirror, the guide from the two older routes, and keeps its saved list on the device. |
-| 4.3 | The app repository has never been pushed | Owner | `johncarry301/soluplay-app` is public and **empty**: no commits, no releases. The manifest mirror answers 404, the app has nothing to read and the download page has nothing to offer. This repository holds seven local commits that have never been pushed. |
+| 4.3 | The app repository has never been pushed | Owner | `johncarry301/soluplay-app` is public and **empty**: no commits, no releases. The manifest mirror answers 404, the app has nothing to read and the download page has nothing to offer. This repository holds nine local commits that have never been pushed. It has been read end to end before publication: no credential, no signing material, no personal file and no build output is in it, and every path the release job depends on was checked against the build. |
 | 4.4 | The release job has never run a release | Owner | The job that publishes the build and writes the manifest is written and reviewed, but it has never run: it needs the four secrets (0.1) and a `v*` tag. |
 | 4.5 | A real release to update to | Owner | The updater is proved against a manifest, not against a real build. It needs a real `SoluPlay.apk` in GitHub Releases, and **that APK must be signed with the same key as the installed app** — a debug-signed build cannot be replaced by a release-signed one and the system refuses it. The release keystore (0.1) is therefore on the path to the first real update, not only to the store listing. |
 | 4.6 | The install prompt on a real box | Owner | The `PackageInstaller` session, the *install unknown apps* permission, the system's own prompt and the result coming back through the receiver can only be seen on a device. |
@@ -118,6 +118,29 @@ manifest from this repository.
 - *Splitting into two packages* — not yet. One APK covers a handset and an
   Android TV box; the split is prepared as the `tv` flavour and waits for the
   day the two need separate packages (PLAN §12).
+
+## The first publication, in order
+
+1. **Create the release key.**
+   `export SOLUPLAY_KEYSTORE_PASSWORD='…'` and then
+   `scripts/create-release-keystore.sh`. The passphrase is yours alone: it is
+   never written to this repository and never printed.
+2. **Back the key up** to two places off this machine and keep the passphrase
+   in a password manager. Without both, no update can ever be signed for the
+   people who already installed the app.
+3. **Add the four secrets** to this repository: `KEYSTORE_BASE64` (the base64
+   of `keystore/release.jks`), `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`soluplay`)
+   and `KEY_PASSWORD`. The job refuses to run without them rather than
+   publishing an unsigned or wrongly-signed build.
+4. **Push `main`.** The branch has never been on the remote, and the release
+   job needs it to exist there before it can write the manifest into it.
+5. **Watch the `build` job go green** on that push. The release job waits for
+   it, so a red build means no release and no manifest.
+6. **Push the tag `v0.2.0`.** That runs the release job: it builds the signed
+   phone APK, publishes it as the release asset, and writes `latest.json` into
+   `main` with the real version number, size and fingerprint.
+
+Nothing else is needed for the manifest to become valid and reachable.
 
 ## The rule behind the list
 
