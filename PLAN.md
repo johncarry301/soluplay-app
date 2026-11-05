@@ -1519,3 +1519,124 @@ it is the owner's call when the first release is cut.
 This pass is committed in the local repository and **nothing was pushed,
 released or deployed**; no keystore was touched. The `freetv` additions are
 in that repository's working tree for review, and the site is untouched.
+
+### Amendment 15 — 2026-11-05, Phase 6: the ten-foot page for the boxes that run a browser and nothing else
+
+Phase 6 is the last row of §12: **`/tv` web layout** in `freetv` for
+Tizen/webOS, D-pad handling, no promos — done when *"An old Samsung box gets
+a 10-foot page"*. The code half is finished and measured here. The box is
+the owner's, so the gate stays open until he answers it.
+
+**One new route, and one guarded line in an old file.**
+
+The page is `/tv`, and it is **additive**: no existing route was edited, no
+API changed, and the two players and the watch page were not touched. The
+single change to an existing file is a guard in `components/AdManager.tsx` —
+the 24-hour ad modal's Skip button can only be pressed with a mouse, so a box
+would sit behind it with no way out, and the modal is therefore never raised
+on `/tv`. That is the whole of the change to a file that already existed.
+
+**The guide is the site's, in the site's order.**
+
+The rails are the catalogue's own seven, in the catalogue's own order, and
+the order inside a rail is left exactly as the catalogue answered it — pinned
+first, then the admin's priority, then the name. **Nothing on this page
+re-ranks a channel.** A channel whose category the site does not know goes
+into an "Other" rail at the end rather than being dropped, because a guide
+that quietly loses a channel is worse than a guide with one more row.
+
+**The remote's rules are the app's rules.**
+
+The walk is the one `TvFocus.kt` walks its guide with, copied rather than
+invented: up and down move between rows, left and right move inside a row, a
+row that holds nothing is stepped over rather than stopping the walk, the
+walk **stops at the ends** instead of wrapping round to the other side, and
+the column is clamped into the row it lands on. The bar is the first row of
+the walk, so the remote can always get back to it.
+
+The keys are read **by their number before their name**. The engines in the
+field — Tizen 2016–2019 and webOS 1–3, all of them Chrome 38 or older — do
+not always fill in `event.key`, so a page that only reads the name of the key
+hears nothing on half the boxes that exist. The Tizen BACK key (`10009`),
+the arrows and Enter are read from `keyCode`; the name is the fallback for
+the engines that do fill it in.
+
+Three more old-engine hazards are respected: `Array.prototype.sort` is **not
+stable** on Chrome 38, so every order in this page is settled by an explicit
+index tie-break rather than by the sort's own idea of a tie; `scrollIntoView`
+with options is unreliable, so the focused tile is brought into view by
+measuring `getBoundingClientRect` and moving the scroll by the difference;
+and `padStart`, `find` and `includes` are avoided in the pure modules, which
+use `indexOf` instead.
+
+**The search is drawn, because a television has no keyboard.**
+
+The keyboard is the app's own: three rows of ten, the last row holding the
+space, the delete, the clear and the search, so the remote walks a square
+grid and never a ragged one. The ranking is the app's too — a channel whose
+name *begins* with what was typed comes before one that merely contains it,
+and a channel that matches only because of its category or its tags comes
+after both.
+
+**Nothing is promoted, and the picture is the picture.**
+
+There is no app-download banner, no news ticker, no fixture promo, no admin
+link, no download CTA and no ad modal on `/tv`. A channel that opens takes
+the whole screen: the same `DirectHlsPlayer` and `MpegTsPlayer` the watch
+page uses, **unchanged**, fed by `buildLadderFromMirrors` so the ladder is
+the server's own ranking and the automatic failover is the players' own. The
+only thing added over the picture is the channel's own name, which fades
+after six seconds.
+
+A channel whose every mirror failed **comes off the guide** — a tile a
+viewer can pick must be a tile that plays — and the remote lands on the next
+channel in the same row. That is the app's rule too, and it is the one the
+plan kept from the web.
+
+**The gate.** In `freetv`:
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | clean |
+| `npm run test:tv` | 24 tests, 0 failures (all new) |
+| `npm run test:all` | 208 tests, 0 failures |
+| `npm run build` | green — `/tv` is a static route, 7.88 kB |
+
+The twenty-four new tests hold the rules a box depends on: that a key is read
+by its number before its name, that the Tizen BACK key is understood, that
+the walk steps over an empty row and stops at the ends, that the column is
+clamped into the row it lands on, that the rails are the site's seven in the
+site's order, that the search's ranking is name-first, that the order inside
+a rail is never re-sorted, and that the keyboard is three rows of ten.
+
+**The proof that was possible here, and what it was not.**
+
+The production build was run locally against the in-memory catalogue and
+read in a real browser at 1920 × 1080. The guide drew its rails in the
+site's order with the site's own logos; the walk was measured off the live
+DOM, not off the code: **Guide → right → Search → right → Refresh → down →
+the third tile of the first rail → left → the second tile → up → back on
+the bar, in the same column → up → no move → left → Guide → left → no
+move**. The search typed a name on the drawn keyboard and ranked the answers
+name-first; BACK on the search tab returned to the guide while BACK on the
+guide was left to the browser, so a viewer can still leave the page. A
+mirror whose origin answered 404 was walked to the end of the ladder, and
+the channel came off the guide with the focus on the next one.
+
+The catalogue was read from the in-memory store and **nothing was written**:
+`data/store.json` is byte-identical afterwards
+(`28400f8f06888cdf9537681f4c75b60e6bfdbcc468f53d41eba3564ef28a4c2e`).
+
+**Still open.**
+
+- *The old Samsung box.* Everything above is a claim about a screen, and
+  screens are seen on boxes. §10 is honest about this: the last mile of
+  every phase is the owner's.
+- *The `/tv` route is not deployed.* It is in the local `freetv` repository
+  only. §13 says every addition to `freetv` needs its own review before it
+  goes live, so it waits for that review beside the three Phase 4 routes.
+
+This pass is committed in the local repositories and **nothing was pushed,
+released or deployed**; no keystore was touched and the live site is
+untouched.
+
