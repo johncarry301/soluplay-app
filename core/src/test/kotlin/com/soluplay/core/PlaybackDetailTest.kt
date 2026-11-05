@@ -9,6 +9,7 @@ import com.soluplay.core.player.PlaybackFault
 import com.soluplay.core.player.PlaybackMachine
 import com.soluplay.core.player.PlaybackPhase
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -105,5 +106,35 @@ class PlaybackDetailTest {
 
         assertEquals("", machine.state.detail)
         assertEquals(FailoverReason.PLAYER_ERROR, machine.state.failure)
+    }
+
+    @Test
+    fun `a certificate refusal reaches the screen`() {
+        val clock = Clock()
+        val machine = PlaybackMachine(now = clock::now)
+        val commands = machine.play(detail("https://example.test/live/stream.m3u8"))
+        val attempt = commands.filterIsInstance<PlaybackCommand.Prepare>().single().attempt
+
+        machine.onError(PlaybackFault.FATAL, attempt, PlaybackDetails.TLS_EXPIRED)
+
+        assertEquals("tls-expired", machine.state.detail)
+        assertEquals(FailoverReason.PLAYER_ERROR, machine.state.failure)
+    }
+
+    @Test
+    fun `a certificate refusal moves the walk on at once`() {
+        val clock = Clock()
+        val machine = PlaybackMachine(now = clock::now)
+        val commands = machine.play(
+            detail(
+                "https://example.test/live/one.m3u8",
+                "https://example.test/live/two.m3u8",
+            ),
+        )
+        val attempt = commands.filterIsInstance<PlaybackCommand.Prepare>().first().attempt
+
+        val after = machine.onError(PlaybackFault.FATAL, attempt, PlaybackDetails.TLS_ISSUER)
+
+        assertTrue("the broken mirror was not given up", after.any { it is PlaybackCommand.Cancel })
     }
 }

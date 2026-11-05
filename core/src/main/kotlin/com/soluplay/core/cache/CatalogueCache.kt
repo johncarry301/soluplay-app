@@ -57,16 +57,36 @@ class FileCatalogueCache(
 
     override fun write(channelsJson: String, fixturesJson: String?) {
         directory.mkdirs()
-        File(directory, CHANNELS_FILE).writeText(channelsJson)
-        File(directory, SAVED_AT_FILE).writeText(now().toString())
-        val fixtures = File(directory, FIXTURES_FILE)
+        // A copy that is half written is worse than no copy at all: the app
+        // would read it as no guide and fall through to the baked one. So the
+        // new copy is written beside the old one and moved into its place,
+        // and the copy that is already there is never the one being damaged.
+        writeAtomically(File(directory, CHANNELS_FILE), channelsJson)
         if (fixturesJson != null) {
-            fixtures.writeText(fixturesJson)
+            writeAtomically(File(directory, FIXTURES_FILE), fixturesJson)
         } else {
             // A board that could not be read leaves no board behind: one saved
             // on another day would be shown as if it were today's.
-            fixtures.delete()
+            File(directory, FIXTURES_FILE).delete()
         }
+        writeAtomically(File(directory, SAVED_AT_FILE), now().toString())
+    }
+
+    /**
+     * Writes a copy so that the one already in place is whole until the new
+     * one is.
+     */
+    private fun writeAtomically(target: File, body: String) {
+        val temporary = File(target.parentFile, "${target.name}.new")
+        temporary.writeText(body)
+        if (temporary.renameTo(target)) return
+
+        // Windows will not rename over a file that is there, so the old copy
+        // is moved aside first and the new one takes its place.
+        if (target.exists() && target.delete() && temporary.renameTo(target)) return
+
+        target.writeText(body)
+        temporary.delete()
     }
 
     companion object {

@@ -21,6 +21,7 @@ import com.soluplay.core.player.PlaybackFault
 import com.soluplay.core.player.PlaybackHost
 import com.soluplay.core.player.PlaybackListener
 import com.soluplay.core.player.StreamKind
+import com.soluplay.core.tls.ProviderTls
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -300,13 +301,32 @@ class Media3PlaybackHost(
      * Only a failure of the network itself is treated as temporary: anything
      * else means the mirror is broken, and the walk moves on to the next
      * published mirror at once.
+     *
+     * A certificate that was turned away is a broken mirror, not a bad moment:
+     * the same address will be turned away again, so it is not given a second
+     * try and the walk moves on at once.
      */
-    private fun faultOf(error: PlaybackException): PlaybackFault = when (error.errorCode) {
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-        -> PlaybackFault.TRANSIENT
+    private fun faultOf(error: PlaybackException): PlaybackFault = when {
+        ProviderTls.isCertificateFailure(error) -> PlaybackFault.FATAL
+
+        error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+            error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+            PlaybackFault.TRANSIENT
 
         else -> PlaybackFault.FATAL
+    }
+
+    /**
+     * What the player said about the failure, in the app's own words.
+     *
+     * A certificate refusal carries the reason it was refused, so a viewer is
+     * told whether the chain was unknown, the certificate had run out, this
+     * device's clock was wrong or the certificate was for another name —
+     * four problems with four different answers.
+     */
+    private fun detailOf(error: PlaybackException): String {
+        if (!ProviderTls.isCertificateFailure(error)) return ""
+        return PlaybackDetails.tlsDetail(ProviderTls.reasonOf(error))
     }
 
     /** What the player saw, turned into the machine's language. */
@@ -334,7 +354,7 @@ class Media3PlaybackHost(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            listener?.onError(faultOf(error), attempt)
+            listener?.onError(faultOf(error), attempt, detailOf(error))
         }
     }
 

@@ -5,6 +5,8 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLSocketFactory
 
 /**
  * The one way the app reaches the network.
@@ -40,10 +42,15 @@ class UnusableAnswerException(message: String) : SiteAnsweredException(message)
  * HTTPS with no credentials. A non-2xx answer raises rather than returning an
  * empty string, because an outage must never be mistaken for an empty
  * catalogue.
+ *
+ * The secure context it uses can be handed to it, so the app's own traffic
+ * goes through the certificate repair even if the default one was replaced
+ * by something else in the meantime.
  */
 class UrlConnectionTransport(
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 12_000,
+    private val sslSocketFactory: SSLSocketFactory? = null,
 ) : HttpTransport, JsonPoster {
 
     override suspend fun get(url: String): String = withContext(Dispatchers.IO) {
@@ -54,6 +61,7 @@ class UrlConnectionTransport(
             connection.readTimeout = readTimeoutMs
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("User-Agent", USER_AGENT)
+            secureContext(connection)
 
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
@@ -83,6 +91,7 @@ class UrlConnectionTransport(
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("User-Agent", USER_AGENT)
             connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            secureContext(connection)
 
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
@@ -93,6 +102,16 @@ class UrlConnectionTransport(
         } finally {
             connection.disconnect()
         }
+    }
+
+    /**
+     * The secure context this connection is made with.
+     *
+     * A plain HTTP connection has none, and saying so is cheaper than asking.
+     */
+    private fun secureContext(connection: HttpURLConnection) {
+        val factory = sslSocketFactory ?: return
+        if (connection is HttpsURLConnection) connection.sslSocketFactory = factory
     }
 
     companion object {

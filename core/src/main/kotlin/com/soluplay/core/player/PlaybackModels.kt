@@ -1,5 +1,7 @@
 package com.soluplay.core.player
 
+import com.soluplay.core.tls.TlsRefusal
+
 /**
  * What the player is doing right now.
  *
@@ -114,6 +116,18 @@ object PlaybackDetails {
     /** The YouTube page could not be loaded. */
     const val YOUTUBE_PAGE = "youtube.page.failed"
 
+    /** The chain does not end at a certificate this app carries. */
+    const val TLS_ISSUER = "tls-issuer"
+
+    /** The certificate itself has run out. */
+    const val TLS_EXPIRED = "tls-expired"
+
+    /** This device's clock is not the clock the certificate was made for. */
+    const val TLS_CLOCK = "tls-clock"
+
+    /** The certificate is for another name. */
+    const val TLS_ADDRESS = "tls-address"
+
     private const val YOUTUBE_ERROR = "youtube.error."
 
     /** The number YouTube refused a video with. */
@@ -124,6 +138,14 @@ object PlaybackDetails {
 
     /** The number a refusal by YouTube carries. */
     fun youTubeErrorCode(detail: String): String = detail.removePrefix(YOUTUBE_ERROR)
+
+    /** The reason a certificate was turned away, as the app names it. */
+    fun tlsDetail(reason: TlsRefusal): String = when (reason) {
+        TlsRefusal.ISSUER -> TLS_ISSUER
+        TlsRefusal.EXPIRED -> TLS_EXPIRED
+        TlsRefusal.CLOCK -> TLS_CLOCK
+        TlsRefusal.ADDRESS -> TLS_ADDRESS
+    }
 }
 
 /**

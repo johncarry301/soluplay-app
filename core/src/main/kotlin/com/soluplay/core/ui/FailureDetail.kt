@@ -33,6 +33,26 @@ fun failureDetail(detail: String): BilingualText = when {
         "The YouTube page could not be loaded.",
     )
 
+    detail == PlaybackDetails.TLS_ISSUER -> BilingualText(
+        "এই মিররের সার্টিফিকেটের চেইনটি এই ডিভাইসের পরিচিত নয়।",
+        "This mirror's certificate chain is not known to this device.",
+    )
+
+    detail == PlaybackDetails.TLS_EXPIRED -> BilingualText(
+        "এই মিররের সার্টিফিকেটের মেয়াদ শেষ হয়ে গেছে।",
+        "This mirror's certificate has expired.",
+    )
+
+    detail == PlaybackDetails.TLS_CLOCK -> BilingualText(
+        "এই ডিভাইসের দিন-সময় সার্টিফিকেটের সঙ্গে মিলছে না।",
+        "This device's clock does not match the certificate.",
+    )
+
+    detail == PlaybackDetails.TLS_ADDRESS -> BilingualText(
+        "এই মিররের সার্টিফিকেটটি অন্য ঠিকানার জন্য।",
+        "This mirror's certificate is for another address.",
+    )
+
     PlaybackDetails.isYouTubeError(detail) -> {
         val code = PlaybackDetails.youTubeErrorCode(detail)
         BilingualText(

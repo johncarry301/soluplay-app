@@ -57,4 +57,46 @@ class FailureDetailTest {
         assertEquals("hls.something.new", words.english)
         assertEquals("hls.something.new", words.bengali)
     }
+
+    @Test
+    fun `a certificate chain nobody trusts says so`() {
+        val words = failureDetail(PlaybackDetails.TLS_ISSUER)
+        assertTrue(words.english.contains("certificate"))
+        assertTrue(words.bengali.isNotBlank())
+    }
+
+    @Test
+    fun `a certificate that has run out says so`() {
+        val words = failureDetail(PlaybackDetails.TLS_EXPIRED)
+        assertTrue(words.english.contains("expired"))
+        assertTrue(words.bengali.isNotBlank())
+    }
+
+    @Test
+    fun `a clock that does not match says so`() {
+        val words = failureDetail(PlaybackDetails.TLS_CLOCK)
+        assertTrue(words.english.contains("clock"))
+        assertTrue(words.bengali.isNotBlank())
+    }
+
+    @Test
+    fun `a certificate for another address says so`() {
+        val words = failureDetail(PlaybackDetails.TLS_ADDRESS)
+        assertTrue(words.english.contains("address"))
+        assertTrue(words.bengali.isNotBlank())
+    }
+
+    @Test
+    fun `the four certificate reasons are told apart`() {
+        val codes = listOf(
+            PlaybackDetails.TLS_ISSUER,
+            PlaybackDetails.TLS_EXPIRED,
+            PlaybackDetails.TLS_CLOCK,
+            PlaybackDetails.TLS_ADDRESS,
+        )
+
+        val words = codes.map { failureDetail(it).english }
+
+        assertEquals("two reasons say the same thing", codes.size, words.toSet().size)
+    }
 }

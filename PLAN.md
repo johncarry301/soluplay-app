@@ -1062,3 +1062,114 @@ picture away.
 
 Nothing in this pass was committed, pushed, released or deployed, and no
 keystore was touched. The working tree holds the changes for review.
+
+### Amendment 12 — 2026-11-05, Phase 3: the television that was never given the roots
+
+Phase 3 is the phase the old television app was written for: **a box that never
+got a CA update, playing a mirror whose certificate chain stops one certificate
+short of a root it has never heard of.** Its gate is *"An aynaott/alixbd
+channel plays on an Android 9 box"*. Half of that can be measured here and half
+of it cannot; what was measured is written down below, and what is left for the
+box is named at the end rather than dressed up.
+
+**The problem, as it is on the wire.** The chains are not broken — they are
+short:
+
+- `tvsen5.aynaott.com` sends `leaf ← YR1 ← Root YR` and stops. The next
+  certificate in that chain is ISRG Root X1, which a 2019 television never
+  received. A browser on a current machine completes it; the box cannot.
+- `alixbd.com` sends **its leaf only**. The issuer is not on the wire at all,
+  so nothing can be completed from what arrived — the issuer has to come from
+  somewhere else.
+- The same shape runs through the families the app leads to: `aynascope`,
+  `sscsott`, `ottplus`, `bbaria`, `klowdtv`, `sonarbanglatv`, and one short of
+  DigiCert Global Root G3 for the `sofast`/`akamai` chain.
+
+**What changed.**
+
+- *The repair is written from the ground up* (`core/…/tls/ProviderTls.kt`) in
+  the ordering the plan demands: **the box's own store is asked first and every
+  one of its checks is kept**; only in its refusal path is the chain completed,
+  by walking issuer to subject and adding **only a certificate that actually
+  signed the one on top** — never a flat bundle handed over for a verifier to
+  build a path through; the completed chain is **offered back to the platform
+  first**, because a platform that can finish it itself should be the one to
+  say so; and only then is it validated properly — full PKIX validation
+  anchored at a certificate this app carries, with the signatures, the dates,
+  the CA flag and the server-auth usage all checked.
+- *Trust still ends at a root this app deliberately carries.* Verification is
+  never switched off, no certificate is accepted on its word, and no host is
+  pinned: the address a playlist names is not always the address the player
+  dials.
+- *The bundle is three certificates* (`app/src/main/res/raw/provider_roots.pem`):
+  **Sectigo Public Server Authentication CA DV R36** (not self-signed — it is
+  used as an anchor, and it is the certificate that proves the old app really
+  did work on Android 9–11 television boxes), **DigiCert Global Root G3**, and
+  **ISRG Root X1**. The same three are declared in
+  `network_security_config.xml`.
+- *The four reasons are kept and they reach the screen.* `tls-issuer`,
+  `tls-expired`, `tls-clock` and `tls-address` are read out of the platform's
+  own refusal, carried through `PlaybackDetails` → `PlaybackState.detail` →
+  the panel, and printed in Bengali and English. A failure that says nothing is
+  a failure the viewer cannot act on.
+- *A certificate refusal is a broken mirror, not a bad moment.* It is FATAL, so
+  the ladder walk moves to the next mirror at once instead of retrying a mirror
+  that can never play.
+- *The old-box proof is in the repo* (`ProviderTlsTest`, 15 tests) and it is a
+  proof, not a demonstration: a store built to be a 2018 television refuses the
+  captured aynaott chain **as sent**, and the same bytes are accepted once the
+  bundle completes and anchors them; a self-signed certificate claiming
+  `CN=alixbd.com` is still turned away; a certificate that has run out is still
+  turned away, with the reason `EXPIRED`, while the identical bytes are
+  accepted at the pinned date of 2026-10-20.
+- *The toolchain's `run-oldbox.sh` is recreated in the repo*
+  (`LiveOldBoxHarnessTest`, run with `-Dsoluplay.live=1`), so the measurement
+  no longer needs the deleted Java project. It dials every host the live
+  catalogue leads to, takes the chain the host really sends, and puts it to
+  this machine's store, to a simulated 2018 store, and to that same 2018 store
+  through the repair.
+- *The resilience ladder is complete and honest*: the live site first, then the
+  copy saved on the device, then the copy baked into the APK — and **every
+  screen says which copy it is showing** (`BrowseChrome`: live / saved copy /
+  built-in copy / no copy). The saved copy is written **whole** (an atomic
+  write, so a crash mid-write cannot destroy it) and **only from an answer that
+  is a guide**: an answer that reports a failure, or that carries no channels,
+  never touches it. The seed carries names and logos and **no stream addresses
+  at all**, and the ladder of mirrors is read from the site only — so a stale
+  guide can never walk a viewer into a link that died days ago.
+
+**The measurement, live.** 37 hosts were dialled from the live catalogue.
+**10 were turned away by the simulated 2018 box, and the bundle rescued all
+10** — `tvsen5` and `tvsen6.aynaott.com`, `stream.ottplus.live`,
+`box.bbaria.net`, `a-cdn.klowdtv.com`, `app24.jagobd.com.bd`,
+`livetv.shamon-cable.net`, `mtv.sunplex.live`,
+`g4wlkwx8l23a-hls-live.5centscdn.com` and `raw.githubusercontent.com`. **None
+was left refused**, and none was refused for a date. The aynaott certificate has
+meanwhile been renewed — the captured one ran out on 3 November 2026, the live
+one is good until 25 January 2027 and is issued by `YR1` now — and it still
+needs the bundle: that chain still stops one short of ISRG Root X1.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours built, **191
+unit tests per suite**, no failures, **4 skipped** — the live harnesses, which
+only run when they are asked for. Thirty-one of the tests are new in this
+phase: fifteen that prove the repair against a 2018 store, eight that keep the
+saved copy honest, five that name the four certificate reasons, two that carry
+a refusal to the screen and on to the next mirror, and one live harness.
+
+**Still open.**
+
+- *The backup base URLs are still empty* (`ApiConfig.BACKUP_BASE_URLS`). The
+  machinery tries them in order and is tested; the addresses are yours to name
+  (§14.3). Until they are named, "your domain dying" is survived by the saved
+  copy and the baked seed, not by a second address.
+- *The box itself is still the last mile.* Nothing here proves that an
+  Android 9 television plays an aynaott channel: the repair has been proved
+  against the chains the servers really send, and the box has to be asked. What
+  the box has to show: an aynaott channel playing a picture, with no
+  certificate reason on the panel.
+- *The old toolchain scripts still point at the deleted project*
+  (`android-tv-toolchain/e2e/run-oldbox.sh`, `run-tls.sh`). The in-repo
+  harnesses replace them; the stale copies can go.
+
+Nothing in this pass was committed, pushed, released or deployed, and no
+keystore was touched. The working tree holds the changes for review.

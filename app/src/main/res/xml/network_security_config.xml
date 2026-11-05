@@ -10,12 +10,21 @@
     So cleartext is permitted in general and denied for the addresses that
     carry the app's own traffic — the site and the update manifest — so a
     downgrade of those can never happen.
+
+    The three certificates the app carries are trust anchors of their own.
+    They are the roots that were measured to be missing on the televisions
+    this app has to run on: a box whose CA bundle was never updated turns
+    away the mirrors of several providers, while a browser on a current
+    machine does not. They are named here as well as in the repair in
+    core/tls/ProviderTls.kt, because the platform's own check and the
+    repair's check are two different doors and both have to be open.
 -->
 <network-security-config>
 
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
+            <certificates src="@raw/provider_roots" />
         </trust-anchors>
     </base-config>
 
