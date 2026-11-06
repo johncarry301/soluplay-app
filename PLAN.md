@@ -94,6 +94,10 @@ no manual "Server N" control exists →  same rule the web now follows
 
 **Screens:** Home (match strip → rails → logo grid) · Category · Watch · Match board · Search · Favourites · Settings · Update sheet.
 
+> The home line above is superseded by **Amendment 18**: the phone's guide is
+> one flat grid under a row of category pills, not rails. The rails stay on the
+> television, which draws its own rows.
+
 **Same visual language as the web:** `#00c978` accent, `#060b13` background, `#0a1222` panels, the pill row, the 4-column circular logo grid with the live dot, the match strip on top.
 
 **Gestures** — note the last one is the rule you kept on the web:
@@ -1736,4 +1740,170 @@ the first push, the `v0.2.0` tag, and the device half of every phase.
 
 This pass is committed in the local repository and **nothing was pushed,
 released or deployed**; no keystore was touched.
+
+### Amendment 18 — 2026-11-06, the phone looks like the site again
+
+**Why this amendment exists.** The app worked and looked like a different
+product. The phone home was built to the Phase 1 plan, which described a
+rail-based guide; the site's own mobile view is a **flat grid under a row of
+pills**, with the match board above it. The owner saw the difference and said
+so: *"as per our plan the mobile app UI should be similar to our mobile view
+web interface. but here it looks completely different UI."*
+
+**This amendment supersedes the "Home (match strip → rails → logo grid)" line
+in §5**, and the "the 4-column circular logo grid with the live dot" phrase
+in the line after it. The rails are gone from the phone: a rail is a heading
+and a count, and the site's phone shows neither. §5's **screens** line stands
+otherwise, and so do the gesture rules — a tap still never pauses.
+
+**The four decisions (the owner's, 2026-11-05).**
+
+| Question | Answer |
+|---|---|
+| The home grid | **Flat, like the web** — one list in the server's order, the categories as pills that filter it in place. The seven rails and their counts are dropped on the phone. |
+| The bottom bar | **Keep the four tabs** (Home / Matches / Search / Saved), restyled to the site's panel colours. |
+| The match cards | **Copy the site's card** — title box on top, two 4:3 team flags, the LIVE badge or the kick-off time, the countdown in the foot bar. The team-name→flag table is ported into the app. |
+
+**The site was read, not guessed.** `components/FixtureBoard.tsx`,
+`app/page.tsx`, `app/watch/[id]/page.tsx`, `components/Header.tsx` and
+`lib/teamFlags.ts` in the `freetv` repository were read before anything was
+written, and the app's screens were rebuilt to that markup — the same class
+names, the same Tailwind values, the same paddings. The seven categories and
+their exact `Channel.category` values were copied from `lib/categories.ts`, so
+a pill on the phone filters exactly what the same pill filters on the site.
+
+**P1 — the home grid.** One flat four-column grid in the order the server
+published, the categories as a row of pills that filter it in place, the active
+pill filled with the site's `#00c978`. Every channel stands on a 56 dp round
+white plate with a slate border and its logo fitted inside it, the site's
+emerald dot on its corner and the name in 9 sp under it. The site's own gaps
+(6 dp) and padding (8 dp) are used, and the whole guide sits in one `#0a1222`
+rounded panel with the pills on their own darker band above it, as the site
+draws them. The rail headings and their counts are gone; `GuideLayout.kt` and
+its test were removed with them, because nothing drew them any more.
+
+**P2 — the match board.** `core/ui/FixtureBoard.kt` draws the site's card:
+the title box on top with the sport mark at its left and the title centred and
+uppercase, the competition line under it, the two team flags in 4:3 white
+panels, the red LIVE badge with its pulsing dot or the kick-off time, and the
+foot bar with the amber countdown or the emerald "click here to watch live".
+The phone's second column slides every five seconds over 700 ms, as the site
+does. The team-name→flag table is ported whole into
+`core/fixtures/TeamFlags.kt`, so the app and the website put the same flag on
+the same match.
+
+**P3 — the chrome.** The header and the bottom bar are restyled to the site's
+proportions and its panel colours; the four tabs stay.
+
+**P4 — the watch page.** The app's own gestures are kept — a tap never
+pauses — and the chrome around the picture is the site's: the channel band
+with the round white logo plate, the name in black, the emerald category pill,
+the red LIVE pill, and the two buttons the site's band carries. The site's
+"tap a channel in the grid to switch" pattern is added as a phone sheet
+(`PhoneChannelSheet.kt`) that opens from the band.
+
+**F5 and the live dot.** F5 (Amendment 5) removed the live dot because the
+catalogue publishes mirror counts and not broadcast state, so a dot claimed
+something the catalogue does not say. Reading the site settles it: the site's
+own grid draws that emerald pulsing dot on **every** tile, and it is a
+decoration of the guide, not a per-channel state. The app now draws the same
+dot on every tile, which is what parity means here. F5's objection still
+stands against a dot that *claims* a channel is broadcasting; nothing in this
+pass makes that claim.
+
+**The gate.** `scripts/build.sh` is green: both debug flavours and both
+release flavours compile, and all four unit-test suites pass — **289 tests per
+suite, 0 failures, 4 skipped**. `TeamFlagsTest.kt` is new and carries the
+eleven cases the site's own team-flags test carries, so the two tables are
+proved to behave the same way; the BDT kick-off, the day word and the
+countdown label are asserted in `MatchClockTest.kt`. Two pre-existing defects
+were fixed on the way: `Text` has no `fontFeatureSettings` parameter (the
+tabular numerals now go through `TextStyle`), and the slide interval was an
+`Int` where `delay` wants a `Long`.
+
+**One stale test was corrected, not hidden.** `UpdateManifestTest` asserted
+that `latest.json` names no build — true until `v0.2.0` was published, false
+after it. It now asserts the published state instead, which is what the file
+it reads actually says.
+
+**What was not touched.** The `freetv` repository was read and nothing else:
+no API, no route, no site page and no deploy. The Direct HLS and the Secured
+streaming separation are untouched, the server's mirror order and its
+automatic failover are untouched, and no provider-specific header and no
+provider credential appears anywhere in this pass. The television flavour
+keeps its own focus grid — the rails it draws are the site's own rails and
+were not replaced.
+
+**Still open.** The whole of this amendment is a claim about screens, and no
+screen has been seen on a device: the grid's density at a real handset width,
+the card's own height when a title runs to two lines, and whether the sliding
+column behaves under a finger are all device questions. They are written into
+`REMAINING.md` as Phase 7.
+
+This pass is **uncommitted in the local repository**; nothing was pushed,
+released or deployed, and no keystore was touched.
+
+### Amendment 19 — 2026-11-06, the second release: 0.2.1
+
+**Why this amendment exists.** The first release (`v0.2.0`) published the app as
+it stood on 2026-11-05. The phone's home, its match board and its watch page were
+then rebuilt to the site's own mobile view (Amendment 18), and a release has to
+carry what changed — both in the build and in the words that describe it.
+
+**The version.** `versionCode` 2 → 3 and `versionName` `0.2.0` → `0.2.1` in
+`app/build.gradle.kts`. Nothing else in the build file moved: the application id
+is still `com.soluplay.app` for the phone flavour and `com.soluplay.tv` for the
+prepared split, the min SDK is still 21, the target is still 34, and the release
+keeps the same signing configuration and the same key.
+
+**The notes live in the repository now.** `release-notes/v0.2.1.md` says what
+this release changed — the fixes first, then the improvements, then what was
+deliberately left alone. The publishing job reads that file: the release page
+shows it in full, and the manifest carries its **first line**, so the sentence
+the app shows under the update button and the page it opens cannot say different
+things. A release with no notes file falls back to GitHub's generated notes,
+exactly as before, so the change is additive and cannot break a later release.
+
+**One test was rewritten rather than renumbered.** `UpdateManifestTest` asserted
+`versionCode` 2 and `0.2.0` — true until the publishing job wrote the next
+manifest into `main`, and a red build on the branch the release writes to. It now
+asserts what must be true of *any* published manifest: that it names a release,
+that its fingerprint is a sha256, that its URL carries the version it names, and
+that the source in this repository is never behind the manifest it publishes.
+
+**The gate.** `scripts/build.sh` is green — `test`, `lintPhoneDebug`,
+`lintTvDebug`, `assemblePhoneDebug`, `assembleTvDebug`, `assemblePhoneRelease`
+and `assembleTvRelease`, on the portable toolchain, offline. **290 tests per
+suite** across the four suites (phone debug, phone release, TV debug, TV
+release), **0 failures, 4 skipped**.
+
+**The signed build was checked before it was published.** The phone release APK
+built here is signed with the release certificate — `CN=SoluPlay, L=Dhaka, C=BD`,
+certificate SHA-256 `30a5519f72eeb5f1073802b2c0d9b2f6d1713f606d39c457233ae532ca1a20e7`
+— and that is **the same certificate the published `v0.2.0` carries**, read from
+the released file itself. An installed `0.2.0` can therefore be updated in place
+rather than uninstalled first. Its manifest names `com.soluplay.app`,
+`versionCode` 3, `versionName` `0.2.1`, `minSdk` 21, `targetSdk` 34, both ABIs,
+and both launchers — the phone's `MainActivity` and the television's
+`TvActivity`.
+
+**What was published.** The tag `v0.2.1` is what runs the release job: it
+signs the phone flavour with the key from the repository secrets, publishes it
+as `SoluPlay.apk`, and writes `latest.json` into `main` with the version number,
+the size and the fingerprint **read from the bytes it just published**. The
+television flavour is built and measured but not published, exactly as before —
+the phone flavour carries the television launcher, so one download covers a
+handset and a TV box.
+
+**What was not touched.** The `freetv` repository was not read for this release
+and not changed: no API, no route, no site page and no deploy. The Direct HLS
+and the Secured streaming separation are untouched, the server's mirror order
+and its automatic failover are untouched, and no provider-specific header and no
+provider credential appears anywhere in this pass. The signing key, the
+application ids and every unrelated file are as they were.
+
+**Still open.** Nothing in this amendment can be seen on a device: the grid's
+density at a real handset width, the card's own height when a title runs to two
+lines, and the update being offered to an installed `0.2.0` are all in
+`REMAINING.md` under Phase 7 and Phase 4.
 

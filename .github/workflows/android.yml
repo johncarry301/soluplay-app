@@ -129,7 +129,16 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           cp app/build/outputs/apk/phone/release/app-phone-release.apk dist/SoluPlay.apk
-          gh release create "$GITHUB_REF_NAME" dist/SoluPlay.apk --generate-notes
+
+          # The notes for a release live in the repository beside the tag, so
+          # what the release page says is what was written down before the
+          # tag was cut — and not a list the publishing job invented.
+          notes_file="release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$notes_file" ]; then
+            gh release create "$GITHUB_REF_NAME" dist/SoluPlay.apk --notes-file "$notes_file"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/SoluPlay.apk --generate-notes
+          fi
 
       # The manifest is what the app reads, and its fingerprint is what the app
       # checks the download against. Writing it by hand after a release is one
@@ -151,6 +160,15 @@ jobs:
           sha=$(sha256sum dist/SoluPlay.apk | cut -d' ' -f1)
           size=$(stat -c%s dist/SoluPlay.apk)
 
+          # The manifest carries the first line of the same notes file the
+          # release page shows in full, so the line the app reads under the
+          # update button and the page it opens cannot say different things.
+          notes="SoluPlay ${version_name}"
+          notes_file="release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$notes_file" ]; then
+            notes=$(head -n 1 "$notes_file")
+          fi
+
           if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{64}$'; then
             echo "The fingerprint is not a sha256: $sha" >&2
             exit 1
@@ -158,6 +176,7 @@ jobs:
 
           jq \
             --arg vn "$version_name" \
+            --arg notes "$notes" \
             --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg url "$url" \
             --arg sha "$sha" \
@@ -166,7 +185,7 @@ jobs:
             '.versionCode = $vc
              | .versionName = $vn
              | .updatedAt = $now
-             | .releaseNotes = "SoluPlay " + $vn
+             | .releaseNotes = $notes
              | .apkUrl = $url
              | .downloadUrl = $url
              | .fileName = "SoluPlay.apk"

@@ -34,13 +34,27 @@ class UpdateManifestTest {
     }
 
     @Test
-    fun `before the first release the manifest names no build`() {
+    fun `the published manifest names the build that is released`() {
         val manifest = published()
 
-        assertEquals(0, manifest.versionCode)
-        assertTrue(manifest.assetUrl.isBlank())
-        assertNull(UpdatePolicy.offerOf(manifest, "phone"))
-        assertNull(UpdatePolicy.offerOf(manifest, "tv"))
+        assertTrue(manifest.versionCode > 0)
+        assertTrue(manifest.versionName.isNotBlank())
+        assertTrue(manifest.assetUrl.contains("/v${manifest.versionName}/"))
+        assertTrue(manifest.sha256.matches(Regex("[0-9a-f]{64}")))
+        assertNotNull(UpdatePolicy.offerOf(manifest, "phone"))
+        assertNotNull(UpdatePolicy.offerOf(manifest, "tv"))
+    }
+
+    @Test
+    fun `the source in this repository is never behind the manifest it publishes`() {
+        // The manifest names the newest published build, so the build in this
+        // repository is never older than it: a device already running this
+        // source must not be offered a build it is.
+        val manifest = published()
+        val app = appVersion()
+
+        assertTrue(manifest.versionCode <= app.first)
+        assertTrue(app.second.isNotBlank())
     }
 
     @Test
@@ -115,6 +129,16 @@ class UpdateManifestTest {
 
     /** The manifest as it is published in this repository. */
     private fun published(): UpdateManifest = read(repoFile("latest.json").readText())
+
+    /** The version of the build in this repository, as the build file names it. */
+    private fun appVersion(): Pair<Int, String> {
+        val buildFile = repoFile("app/build.gradle.kts").readText()
+        val code = Regex("versionCode\\s*=\\s*(\\d+)").find(buildFile)?.groupValues?.get(1)?.toInt()
+            ?: throw AssertionError("no versionCode in app/build.gradle.kts")
+        val name = Regex("versionName\\s*=\\s*\"([^\"]+)\"").find(buildFile)?.groupValues?.get(1)
+            ?: throw AssertionError("no versionName in app/build.gradle.kts")
+        return code to name
+    }
 
     private fun read(body: String): UpdateManifest =
         SoluPlayJson.json.decodeFromString(UpdateManifest.serializer(), body)
