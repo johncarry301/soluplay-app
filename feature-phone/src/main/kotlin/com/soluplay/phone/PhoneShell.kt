@@ -2,6 +2,7 @@ package com.soluplay.phone
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,9 +51,13 @@ import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.ui.Accent
 import com.soluplay.core.ui.Background
 import com.soluplay.core.ui.Copy
+import com.soluplay.core.ui.HeaderBackground
 import com.soluplay.core.ui.Muted
 import com.soluplay.core.ui.OutageBanner
 import com.soluplay.core.ui.Panel
+import com.soluplay.core.ui.PanelMid
+import com.soluplay.core.ui.Slate400
+import com.soluplay.core.ui.Slate800
 import com.soluplay.core.ui.SourceBadge
 import com.soluplay.core.ui.UiLanguage
 import com.soluplay.core.ui.UiLanguageStore
@@ -222,6 +228,9 @@ fun PhoneShell(
 /**
  * The bar at the top: who the app is, which copy of the guide is on the
  * screen, and the two things the viewer can ask for.
+ *
+ * It is the site's own bar: the same dark band, the same hairline under it,
+ * and the same small pills on the right.
  */
 @Composable
 private fun PhoneTopBar(
@@ -231,43 +240,72 @@ private fun PhoneTopBar(
     onRefresh: () -> Unit,
     onToggleLanguage: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(HeaderBackground),
     ) {
-        Text(
-            text = "SoluPlay",
-            color = Accent,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        SourceBadge(origin = origin)
-        Spacer(modifier = Modifier.weight(1f))
-        Text(
-            text = if (language == UiLanguage.BENGALI) Copy.englishToggle() else Copy.bengaliToggle(),
-            color = Muted,
-            fontSize = 12.sp,
+        Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Panel)
-                .clickable { onToggleLanguage() }
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = if (loading) Copy.refreshing() else Copy.refresh(),
-            color = Muted,
-            fontSize = 12.sp,
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "SoluPlay",
+                color = Accent,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            SourceBadge(origin = origin, fontSize = 11.sp)
+            Spacer(modifier = Modifier.weight(1f))
+            ChromePill(
+                text = if (language == UiLanguage.BENGALI) {
+                    Copy.englishToggle()
+                } else {
+                    Copy.bengaliToggle()
+                },
+                onClick = onToggleLanguage,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            ChromePill(
+                text = if (loading) Copy.refreshing() else Copy.refresh(),
+                enabled = !loading,
+                onClick = onRefresh,
+            )
+        }
+
+        Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Panel)
-                .clickable(enabled = !loading) { onRefresh() }
-                .padding(horizontal = 14.dp, vertical = 7.dp),
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Slate800.copy(alpha = 0.8f)),
         )
     }
+}
+
+/** One of the small pills in the top bar. */
+@Composable
+private fun ChromePill(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    Text(
+        text = text,
+        color = Slate400,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(shape)
+            .background(PanelMid)
+            .border(1.dp, Slate800, shape)
+            .clickable(enabled = enabled) { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    )
 }
 
 /**
@@ -278,18 +316,29 @@ private fun PhoneTopBar(
  */
 @Composable
 private fun PhoneBottomBar(tab: PhoneTab, onPick: (PhoneTab) -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Panel)
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
+            .background(Panel),
     ) {
-        BottomItem(PhoneTab.HOME, Icons.Filled.Home, Copy.home(), tab, onPick)
-        BottomItem(PhoneTab.MATCHES, Icons.Filled.PlayArrow, Copy.matchesTab(), tab, onPick)
-        BottomItem(PhoneTab.SEARCH, Icons.Filled.Search, Copy.searchTab(), tab, onPick)
-        BottomItem(PhoneTab.SAVED, Icons.Filled.Star, Copy.savedTab(), tab, onPick)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Slate800.copy(alpha = 0.8f)),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BottomItem(PhoneTab.HOME, Icons.Filled.Home, Copy.home(), tab, onPick)
+            BottomItem(PhoneTab.MATCHES, Icons.Filled.PlayArrow, Copy.matchesTab(), tab, onPick)
+            BottomItem(PhoneTab.SEARCH, Icons.Filled.Search, Copy.searchTab(), tab, onPick)
+            BottomItem(PhoneTab.SAVED, Icons.Filled.Star, Copy.savedTab(), tab, onPick)
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 package com.soluplay.core
 
 import com.soluplay.core.fixtures.MatchClock
+import com.soluplay.core.fixtures.Remaining
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -71,5 +72,47 @@ class MatchClockTest {
 
         assertNull(MatchClock.remaining(kickOff, kickOff))
         assertNull(MatchClock.remaining(kickOff, kickOff + 1))
+    }
+
+    @Test
+    fun `the kick-off is printed in Bangladesh time`() {
+        // 18:00 in utc is half past midnight the next day in Bangladesh.
+        val printed = MatchClock.kickoffInBdt(1_793_815_200_000L)
+
+        assertEquals("NOV 5, 2026", printed.date)
+        assertEquals("12:00 AM BDT", printed.time)
+    }
+
+    @Test
+    fun `a kick-off in the afternoon is printed in the afternoon`() {
+        // 12:00 in utc is 18:00 in Bangladesh.
+        val printed = MatchClock.kickoffInBdt(1_793_793_600_000L)
+
+        assertEquals("06:00 PM BDT", printed.time)
+    }
+
+    @Test
+    fun `the day a match falls on is named where words help`() {
+        // Noon in utc is 18:00 in Bangladesh, so the day does not change
+        // underneath the test.
+        val kickOff = 1_793_793_600_000L
+
+        assertEquals("TODAY", MatchClock.dayWord(kickOff, kickOff - 60_000))
+        assertEquals("TOMORROW", MatchClock.dayWord(kickOff + 86_400_000, kickOff))
+        assertEquals("", MatchClock.dayWord(kickOff + 5 * 86_400_000, kickOff))
+    }
+
+    @Test
+    fun `the clock counts days while the match is more than a day away`() {
+        val printed = MatchClock.countdownLabel(Remaining(days = 2, hours = 3, minutes = 4, seconds = 5))
+
+        assertEquals("2d 03h 04m", printed)
+    }
+
+    @Test
+    fun `the clock counts seconds in the last day`() {
+        val printed = MatchClock.countdownLabel(Remaining(days = 0, hours = 1, minutes = 2, seconds = 3))
+
+        assertEquals("01h 02m 03s", printed)
     }
 }

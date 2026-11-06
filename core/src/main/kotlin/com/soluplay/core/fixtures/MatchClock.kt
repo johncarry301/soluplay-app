@@ -1,5 +1,6 @@
 package com.soluplay.core.fixtures
 
+import java.util.Calendar
 import java.util.GregorianCalendar
 import java.util.Locale
 import java.util.TimeZone
@@ -49,11 +50,69 @@ object MatchClock {
         if (left <= 0) return null
         val total = left / 1000
         return Remaining(
-            hours = (total / 3600).toInt(),
+            days = (total / 86_400).toInt(),
+            hours = ((total % 86_400) / 3600).toInt(),
             minutes = ((total % 3600) / 60).toInt(),
             seconds = (total % 60).toInt(),
         )
     }
+
+    /**
+     * The kick-off as the card prints it: the date, and the time of day in
+     * Bangladesh.
+     *
+     * Bangladesh is six hours ahead of the clock and keeps no daylight saving,
+     * so the offset is a constant rather than a lookup.
+     */
+    fun kickoffInBdt(millis: Long): BdtTime {
+        val calendar = GregorianCalendar(TimeZone.getTimeZone("UTC"), Locale.US)
+        calendar.timeInMillis = millis + BDT_OFFSET_MILLIS
+
+        val hour24 = calendar.get(Calendar.HOUR_OF_DAY)
+        val hour12 = if (hour24 % 12 == 0) 12 else hour24 % 12
+        return BdtTime(
+            date = "%s %d, %d".format(
+                MONTHS[calendar.get(Calendar.MONTH)],
+                calendar.get(Calendar.DAY_OF_MONTH),
+                calendar.get(Calendar.YEAR),
+            ),
+            time = "%02d:%02d %s BDT".format(
+                hour12,
+                calendar.get(Calendar.MINUTE),
+                if (hour24 < 12) "AM" else "PM",
+            ),
+        )
+    }
+
+    /**
+     * The day a match falls on, in words where words help.
+     *
+     * A card that says "TODAY" or "TOMORROW" tells the reader more than the
+     * date it replaces, and the two are counted in Bangladesh time so the card
+     * never says tomorrow at ten at night.
+     */
+    fun dayWord(millis: Long, nowMillis: Long): String {
+        val day = Math.floorDiv(millis + BDT_OFFSET_MILLIS, 86_400_000L)
+        val today = Math.floorDiv(nowMillis + BDT_OFFSET_MILLIS, 86_400_000L)
+        return when (day) {
+            today -> "TODAY"
+            today + 1 -> "TOMORROW"
+            else -> ""
+        }
+    }
+
+    /**
+     * The clock the card shows: days, hours and minutes while the kick-off is
+     * still more than a day away, and hours, minutes and seconds for the last
+     * day — the hour before the match is the one a viewer watches most closely,
+     * so that is where the seconds are.
+     */
+    fun countdownLabel(remaining: Remaining): String =
+        if (remaining.days > 0) {
+            "%dd %02dh %02dm".format(remaining.days, remaining.hours, remaining.minutes)
+        } else {
+            "%02dh %02dm %02ds".format(remaining.hours, remaining.minutes, remaining.seconds)
+        }
 
     private fun offsetMinutes(zone: String): Int? = when {
         zone.isEmpty() -> 0
@@ -68,11 +127,26 @@ object MatchClock {
         }
         else -> null
     }
+
+    /** Bangladesh is six hours ahead of the clock, all year. */
+    private const val BDT_OFFSET_MILLIS = 6L * 60L * 60L * 1000L
+
+    private val MONTHS = arrayOf(
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+        "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    )
 }
 
-/** The three numbers of the clock left until kick-off. */
+/** The four numbers of the clock left until kick-off. */
 data class Remaining(
+    val days: Int,
     val hours: Int,
     val minutes: Int,
     val seconds: Int,
+)
+
+/** The kick-off as the card prints it. */
+data class BdtTime(
+    val date: String,
+    val time: String,
 )

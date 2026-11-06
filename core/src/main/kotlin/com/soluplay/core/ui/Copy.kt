@@ -227,4 +227,22 @@ object Copy {
     @Composable fun clearKey() = text("মুছে ফেলুন", "Clear")
 
     @Composable fun typeHere() = text("অক্ষর লিখুন", "Type here")
+
+    @Composable fun sportsSection() = text("24/7 স্পোর্টস", "24/7 Sports")
+
+    @Composable fun allChannels() = text("সব", "All")
+
+    @Composable fun watchLive() = text(
+        "এখানে ক্লিক করে সরাসরি দেখুন",
+        "Click here to watch live",
+    )
+
+    @Composable fun liveNowBadge() = text("এখন খেলা হচ্ছে", "LIVE NOW")
+
+    @Composable fun startsAt() = text("শুরু হবে", "Starts at")
+
+    @Composable fun noChannelsOnline() = text(
+        "এখন কোনো চ্যানেল নেই।",
+        "There are no active streams right now.",
+    )
 }

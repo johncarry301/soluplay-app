@@ -87,8 +87,19 @@ fun railsOf(channels: List<Channel>): List<Rail> {
         .sortedBy { rail -> rail.channels.minOf { it.priorityOrder } }
 }
 
-/** The whole catalogue in the order the site published it. */
+/**
+ * The whole catalogue in the order the site published it.
+ *
+ * The server ranks a channel by whether it is pinned, then by the board order
+ * an admin gave it, then by its name. The app sorts the same way, so the grid
+ * on the phone and the grid on the site are the same list in the same order
+ * even when the answer came from the cache or from the copy in the APK.
+ */
 fun allChannelsInOrder(channels: List<Channel>): List<Channel> =
-    channels.sortedBy { it.priorityOrder }
+    channels.sortedWith(
+        compareByDescending<Channel> { it.isPinned }
+            .thenBy { it.priorityOrder }
+            .thenBy { it.name },
+    )
 
 private const val OTHER_CATEGORY = "Other"
