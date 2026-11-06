@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "appId": "com.soluplay.app",
-  "versionCode": 2,
-  "versionName": "0.2.0",
-  "updatedAt": "2026-11-05T13:41:43Z",
-  "releaseNotes": "SoluPlay 0.2.0",
-  "apkUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.0/SoluPlay.apk",
-  "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.0/SoluPlay.apk",
+  "versionCode": 3,
+  "versionName": "0.2.1",
+  "updatedAt": "2026-11-06T03:06:58Z",
+  "releaseNotes": "SoluPlay 0.2.1 — the phone now looks like the website, and the matches carry their flags.",
+  "apkUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.1/SoluPlay.apk",
+  "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.1/SoluPlay.apk",
   "fileName": "SoluPlay.apk",
-  "sizeBytes": 2351622,
-  "sha256": "25d07fb44a05124b412f9292803050a1e2b48321778895d16ddd6b372e01ede1",
+  "sizeBytes": 2379039,
+  "sha256": "872483c8401bd8c0fe45a8b6e3ad3061adad815d60c508317579d48080a5d3cf",
   "mandatory": false,
   "minSupportedVersionCode": 0,
   "rolloutPercent": 100,
@@ -22,18 +22,18 @@
   "variants": {
     "phone": {
       "label": "Android Phone & Tablet",
-      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.0/SoluPlay.apk",
+      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.1/SoluPlay.apk",
       "fileName": "SoluPlay.apk",
-      "sizeBytes": 2351622,
-      "sha256": "25d07fb44a05124b412f9292803050a1e2b48321778895d16ddd6b372e01ede1",
+      "sizeBytes": 2379039,
+      "sha256": "872483c8401bd8c0fe45a8b6e3ad3061adad815d60c508317579d48080a5d3cf",
       "minSdkVersion": 21
     },
     "tv": {
       "label": "Android TV & TV Boxes",
-      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.0/SoluPlay.apk",
+      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.1/SoluPlay.apk",
       "fileName": "SoluPlay.apk",
-      "sizeBytes": 2351622,
-      "sha256": "25d07fb44a05124b412f9292803050a1e2b48321778895d16ddd6b372e01ede1",
+      "sizeBytes": 2379039,
+      "sha256": "872483c8401bd8c0fe45a8b6e3ad3061adad815d60c508317579d48080a5d3cf",
       "minSdkVersion": 21
     }
   }
