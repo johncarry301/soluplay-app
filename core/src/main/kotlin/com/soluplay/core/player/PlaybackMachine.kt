@@ -128,11 +128,34 @@ class PlaybackMachine(
      */
     private var held = false
 
+    /**
+     * True while the walk is going back over the mirrors that were active.
+     *
+     * The mirrors are then tried one at a time, so the viewer sees each of
+     * them tried rather than a whole batch of them tried at once.
+     */
+    private var stepByStep = false
+
+    /**
+     * The mirrors that are held back to the end of the walk.
+     *
+     * A mirror the viewer has just left is held back rather than forgotten:
+     * when the walk goes back over the published mirrors, that one is tried
+     * last, so the viewer is not handed the same mirror again straight away.
+     */
+    private val deferred = mutableListOf<Published>()
+
     /** The candidate that proved a picture, if one has. */
     private var winner: Candidate? = null
 
     /** The try at playing the machine is waiting on. */
     val currentAttempt: Long get() = winner?.attempt ?: attempt
+
+    /** The session the machine is on, counting from one. */
+    val session: Long get() = currentSession
+
+    /** True while the feed is not running: held by the viewer, or the app is away. */
+    val isHeld: Boolean get() = held
 
     /** What the screen has to say. */
     val state: PlaybackState
@@ -147,6 +170,7 @@ class PlaybackMachine(
             racing = candidates.count { !it.proved },
             failure = failure,
             detail = failureDetail,
+            paused = held,
         )
 
     /**
@@ -451,10 +475,14 @@ class PlaybackMachine(
      * The mirrors are taken from the ladder in the order the site published
      * them. When fewer are left than the race holds, the ones that are left
      * are tried together.
+     *
+     * A walk that has gone back over the mirrors that were active before
+     * tries them one at a time, so the viewer sees each of them tried.
      */
     private fun startBatch(): List<PlaybackCommand> {
+        val size = if (stepByStep) 1 else raceSize
         val batch = mutableListOf<Candidate>()
-        while (batch.size < raceSize) {
+        while (batch.size < size) {
             val published = nextPublished() ?: break
             val kind = StreamKinds.kindOf(published.link.url)
             batch += Candidate(
@@ -487,7 +515,8 @@ class PlaybackMachine(
      * A mirror that lost an earlier race comes first, because it was
      * published before the ones that have not been tried yet.
      *
-     * A mirror the viewer has skipped is not offered again.
+     * A mirror the viewer has skipped is not offered again, and a mirror that
+     * has been held back is not offered until every other one has been.
      */
     private fun nextPublished(): Published? {
         while (reserve.isNotEmpty()) {
@@ -497,10 +526,37 @@ class PlaybackMachine(
         }
 
         while (true) {
-            val link = ladder.next() ?: return null
+            val link = ladder.next() ?: break
             if (link.url in skipped) continue
+            if (deferred.any { it.link.url == link.url }) continue
             return Published(link, ladder.position)
         }
+
+        // The mirrors that were held back are tried last of all.
+        while (deferred.isNotEmpty()) {
+            val candidate = deferred.removeAt(0)
+            if (candidate.link.url in skipped) continue
+            return candidate
+        }
+
+        return null
+    }
+
+    /**
+     * The channel's list of mirrors is being read again.
+     *
+     * The walk ran out of mirrors, so the list is asked for once more: a
+     * channel that was publishing a mirror a minute ago may be publishing it
+     * again now. The screen says the list is on its way rather than saying the
+     * channel is dead, because nothing is known about it yet.
+     */
+    fun beginRefresh() {
+        phase = PlaybackPhase.LOADING
+        failure = null
+        failureDetail = ""
+        deadlineAt = null
+        stallSince = null
+        lastPosition = null
     }
 
     /**
@@ -511,13 +567,15 @@ class PlaybackMachine(
      * re-ranked: the walk carries on from where it was, and the mirror that
      * was on the screen is not offered again in this playback.
      *
-     * A channel with one mirror has nowhere else to go, and says so.
+     * When nothing is left ahead of this one, the walk does not end there: it
+     * goes back to the first published mirror and the mirrors that were active
+     * before are tried again, one after another. A channel that has mirrors is
+     * never given up because the walk ran past the end of the list — and the
+     * mirror the viewer has just left is tried last of all, so the button
+     * always leads somewhere else first.
      */
     fun skipToNextMirror(): List<PlaybackCommand> {
-        if (phase == PlaybackPhase.IDLE ||
-            phase == PlaybackPhase.EXHAUSTED ||
-            phase == PlaybackPhase.FAILED
-        ) {
+        if (phase == PlaybackPhase.IDLE || phase == PlaybackPhase.FAILED) {
             return emptyList()
         }
 
@@ -525,7 +583,7 @@ class PlaybackMachine(
         candidates.forEach { commands += PlaybackCommand.Cancel(it.attempt) }
         candidates.clear()
 
-        winner?.let { skipped += it.link.url }
+        val left = winner
         winner = null
 
         deadlineAt = null
@@ -534,8 +592,32 @@ class PlaybackMachine(
         failure = FailoverReason.SKIPPED
         phase = PlaybackPhase.TUNING
 
+        if (hasUnskippedLeft()) {
+            left?.let { skipped += it.link.url }
+        } else {
+            // Nothing is left ahead of this mirror. The walk goes back to the
+            // first published mirror and the mirrors that were active before
+            // are tried again, one after another.
+            skipped.clear()
+            reserve.clear()
+            ladder.reset()
+            deferred.clear()
+            left?.let { deferred += Published(it.link, it.rank) }
+            stepByStep = true
+        }
+
         commands += startBatch()
         return commands
+    }
+
+    /**
+     * True while a published mirror that the viewer has not left is still to
+     * be tried.
+     */
+    private fun hasUnskippedLeft(): Boolean {
+        if (reserve.any { it.link.url !in skipped }) return true
+        if (deferred.any { it.link.url !in skipped }) return true
+        return ladder.remaining().any { it.url !in skipped }
     }
 
     /**
@@ -648,7 +730,9 @@ class PlaybackMachine(
         candidates.clear()
         reserve.clear()
         skipped.clear()
+        deferred.clear()
         held = false
+        stepByStep = false
         winner = null
         // Everything reported from here on belongs to a playback that is over,
         // so the attempt those answers carry is no longer the one waited for.

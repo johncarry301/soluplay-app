@@ -80,6 +80,19 @@ class UpdatePolicyTest {
     }
 
     @Test
+    fun `insecure update offers are refused for fallback and variants`() {
+        for (url in listOf("http://example.com/app.apk", "https://user:pass@example.com/app.apk")) {
+            assertNull(UpdatePolicy.offerOf(UpdateManifest(versionCode = 2, apkUrl = url), "phone"))
+            assertNull(UpdatePolicy.offerOf(UpdateManifest(
+                versionCode = 2,
+                apkUrl = "https://example.com/safe.apk",
+                variants = mapOf("phone" to ManifestVariant(label = "phone", url = url)),
+            ), "phone"))
+            assertNull(UpdatePolicy.decide(offer(url = url), 1, "install", 0, 0).offer)
+        }
+    }
+
+    @Test
     fun `only a newer build is taken`() {
         assertTrue(UpdatePolicy.isNewer(offer(versionCode = 2), currentVersionCode = 1))
         assertFalse(UpdatePolicy.isNewer(offer(versionCode = 1), currentVersionCode = 1))

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        The picture is allowed to go into the cutout of the screen, so the
+        full screen is the whole of the screen and not the whole of the
+        screen minus the notch.
+    -->
+    <style name="Theme.SoluPlay" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/soluplay_background</item>
+        <item name="android:statusBarColor">@color/soluplay_background</item>
+        <item name="android:navigationBarColor">@color/soluplay_background</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

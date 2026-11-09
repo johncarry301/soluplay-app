@@ -68,7 +68,7 @@ import com.soluplay.core.fixtures.BoardPhase
 import com.soluplay.core.fixtures.MatchClock
 import com.soluplay.core.fixtures.Remaining
 import com.soluplay.core.fixtures.TeamFlags
-import com.soluplay.core.fixtures.playableChoices
+import com.soluplay.core.fixtures.openableOptions
 import com.soluplay.core.model.Fixture
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -204,9 +204,9 @@ fun SiteFixtureCard(
     val kickOff = MatchClock.parseKickOff(fixture.startsAt)
     val kickoff = kickOff?.let { MatchClock.kickoffInBdt(it) }
 
-    // A live match whose channels are all shut says so on its face: a red
+    // A live match with nothing at all to open says so on its face: a red
     // badge would promise a stream the card cannot open.
-    val noOffer = live && playableChoices(fixture).isEmpty()
+    val noOffer = live && openableOptions(fixture).isEmpty()
 
     Column(
         modifier = modifier

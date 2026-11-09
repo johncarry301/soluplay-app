@@ -22,3 +22,6 @@ keystore/
 .idea/
 *.iml
 .DS_Store
+
+# Local build and verification output is never released.
+/artifacts/

@@ -168,7 +168,14 @@ class Media3PlaybackHost(
             StreamKind.HLS, StreamKind.MPEG_TS -> MediaRacer(attempt)
         }
         racers[attempt] = racer
-        racer.view?.let { view -> stage?.addView(view, 0, matchParent()) }
+        racer.view?.let { view ->
+            // A mirror that is still being tried does not show its picture.
+            // The screen carries one picture at a time, and a mirror that has
+            // not won the race yet must not put its own picture — or its
+            // loading page — over the screen while the race is being decided.
+            view.alpha = 0f
+            stage?.addView(view, 0, matchParent())
+        }
 
         when (racer) {
             is MediaRacer -> racer.play(url, kind)
@@ -193,7 +200,7 @@ class Media3PlaybackHost(
         // of the ones that are still trying.
         racer.view?.let { view ->
             stage?.bringChildToFront(view)
-            view.visibility = View.VISIBLE
+            view.alpha = 1f
         }
     }
 
@@ -222,6 +229,32 @@ class Media3PlaybackHost(
             is MediaRacer -> racer.player.play()
             is YouTubeRacer -> racer.surface.resume()
             null -> Unit
+        }
+    }
+
+    /**
+     * Holds every player that is in flight.
+     *
+     * Every mirror in a race has a player of its own, and the one that is
+     * making a sound is not necessarily the one on the screen — so all of
+     * them are held, and the app makes no sound in the background.
+     */
+    override fun pauseAll() {
+        racers.values.forEach { racer ->
+            when (racer) {
+                is MediaRacer -> racer.player.pause()
+                is YouTubeRacer -> racer.surface.pause()
+            }
+        }
+    }
+
+    /** Lets every player that is in flight run again. */
+    override fun resumeAll() {
+        racers.values.forEach { racer ->
+            when (racer) {
+                is MediaRacer -> racer.player.play()
+                is YouTubeRacer -> racer.surface.resume()
+            }
         }
     }
 

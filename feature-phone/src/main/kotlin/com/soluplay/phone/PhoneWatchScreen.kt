@@ -1,12 +1,15 @@
 package com.soluplay.phone
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,11 +30,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,6 +67,7 @@ import com.soluplay.core.ui.Slate800
 import com.soluplay.core.ui.WeakSignalPanel
 import com.soluplay.core.ui.playbackStatus
 import com.soluplay.core.ui.watchGestures
+import kotlinx.coroutines.delay
 
 /**
  * The watch screen.
@@ -69,7 +77,8 @@ import com.soluplay.core.ui.watchGestures
  *
  * The finger does the rest: a swipe up or down changes the channel, a swipe
  * sideways asks for another mirror of this one, and two fingers hold the
- * feed where it is.
+ * feed where it is. The two buttons under the picture say the same two things
+ * in words, so nobody has to guess a gesture to hold the feed.
  *
  * The one thing that is always on screen is the truth about the feed: what
  * the app is doing, and why the last mirror was given up.
@@ -84,22 +93,68 @@ fun PhoneWatchScreen(
     onToggleFavourite: () -> Unit,
     onOpenChannel: (Channel) -> Unit,
     onClose: () -> Unit,
+    directUrl: String? = null,
 ) {
     val state by playback.state.collectAsStateWithLifecycle()
-    var chrome by remember { mutableStateOf(true) }
-    var held by remember { mutableStateOf(false) }
-    var picking by remember { mutableStateOf(false) }
 
-    LaunchedEffect(channel.id) {
-        held = false
-        playback.open(channel.id, channel.name, channel.logo)
+    // The screen is turned on its side for the full screen, and the activity
+    // handles that turn itself — so what the viewer asked for is kept.
+    var chrome by rememberSaveable { mutableStateOf(true) }
+    var picking by rememberSaveable { mutableStateOf(false) }
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
+    var hint by remember { mutableStateOf(false) }
+
+    // The feed is held when the viewer holds it, so the picture and the sound
+    // stop together and the app says so.
+    val held = state.paused
+
+    PhoneFullscreen(enabled = fullscreen)
+
+    // The screen is not allowed to sleep while a channel is running.
+    val running = state.phase != PlaybackPhase.IDLE &&
+        state.phase != PlaybackPhase.EXHAUSTED &&
+        state.phase != PlaybackPhase.FAILED &&
+        !held
+    KeepScreenOn(enabled = running)
+
+    // A match link has no catalogue row behind it, so the match's own address
+    // is the ladder; a channel is opened from the catalogue as before.
+    LaunchedEffect(channel.id, directUrl) {
+        if (directUrl != null) {
+            playback.openDirect(channel.id, directUrl, channel.name, channel.logo)
+        } else {
+            playback.open(channel.id, channel.name, channel.logo)
+        }
     }
-    DisposableEffect(channel.id) {
+
+    // The hint is said once, when the watch screen is opened: after that the
+    // viewer knows the gesture.
+    LaunchedEffect(Unit) {
+        hint = true
+        delay(HINT_MS)
+        hint = false
+    }
+
+    DisposableEffect(channel.id, directUrl) {
         onDispose { playback.close() }
     }
+
     BackHandler {
-        if (picking) picking = false else onClose()
+        when {
+            picking -> picking = false
+            fullscreen -> {
+                fullscreen = false
+                chrome = true
+            }
+            else -> onClose()
+        }
     }
+
+    val hintAlpha by animateFloatAsState(
+        targetValue = if (hint) 1f else 0f,
+        animationSpec = tween(durationMillis = 500),
+        label = "hint",
+    )
 
     // The channels in the order the site published them, so a swipe changes
     // the channel the way the guide lists it.
@@ -112,14 +167,14 @@ fun PhoneWatchScreen(
             // A tap brings the words in and out and never pauses the feed.
             GestureIntent.REVEAL_CONTROLS -> chrome = !chrome
 
-            // Two taps give the picture the whole screen.
-            GestureIntent.FULLSCREEN -> chrome = false
+            // Two taps give the picture the whole screen, and give it back.
+            GestureIntent.FULLSCREEN -> {
+                fullscreen = !fullscreen
+                chrome = !fullscreen
+            }
 
             // Two fingers hold the feed where it is.
-            GestureIntent.PAUSE -> {
-                held = true
-                playback.setPaused(true)
-            }
+            GestureIntent.PAUSE -> playback.setPaused(true)
 
             // A sideways swipe stays on this channel and asks for another
             // mirror of it, in the order the site published them.
@@ -130,12 +185,36 @@ fun PhoneWatchScreen(
         }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        PlayerSurface(host = host, modifier = Modifier.fillMaxSize())
+        // While the channel list is open the picture keeps the top of the
+        // screen, so the viewer can still see the channel they are on.
+        val playerHeight = if (picking) maxHeight * 0.28f else maxHeight
+
+        PlayerSurface(
+            host = host,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(playerHeight),
+        )
+
+        // While a mirror is being tried there is no picture yet, and a black
+        // screen says nothing at all — so the frame of the picture is drawn
+        // where the picture is going to be.
+        val waiting = !state.onAir &&
+            state.phase != PlaybackPhase.EXHAUSTED &&
+            state.phase != PlaybackPhase.FAILED &&
+            !held
+        if (waiting) {
+            PlayerLoadingFrame(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(playerHeight),
+            )
+        }
 
         // The gesture layer sits over the picture so a finger reaches the app
         // and not the decoder.
@@ -148,6 +227,7 @@ fun PhoneWatchScreen(
         if (chrome && !picking) {
             WatchTopBar(
                 marked = marked,
+                favouriteable = directUrl == null,
                 onToggleFavourite = onToggleFavourite,
                 onClose = onClose,
                 modifier = Modifier.align(Alignment.TopCenter),
@@ -163,10 +243,7 @@ fun PhoneWatchScreen(
                         .padding(top = 62.dp)
                         .clip(RoundedCornerShape(50))
                         .background(Panel)
-                        .clickable {
-                            held = false
-                            playback.setPaused(false)
-                        }
+                        .clickable { playback.setPaused(false) }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
@@ -174,10 +251,38 @@ fun PhoneWatchScreen(
             WatchBand(
                 channel = channel,
                 state = state,
+                held = held,
+                fullscreen = fullscreen,
+                onTogglePause = { playback.setPaused(!held) },
+                onToggleFullscreen = {
+                    fullscreen = !fullscreen
+                    chrome = !fullscreen
+                },
                 onSkipMirror = { playback.skipMirror() },
                 onPickChannel = { picking = true },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
+        }
+
+        if (hintAlpha > 0.01f) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 58.dp)
+                    .alpha(hintAlpha)
+                    .clip(RoundedCornerShape(50))
+                    .background(Panel.copy(alpha = 0.92f))
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SwipeGlyph(tint = Accent, modifier = Modifier.size(13.dp))
+                Text(
+                    text = Copy.swipeHint(),
+                    color = Color.White,
+                    fontSize = 12.sp,
+                )
+            }
         }
 
         if (picking) {
@@ -211,6 +316,7 @@ fun PhoneWatchScreen(
 @Composable
 private fun WatchTopBar(
     marked: Boolean,
+    favouriteable: Boolean,
     onToggleFavourite: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -244,11 +350,15 @@ private fun WatchTopBar(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            FavouriteStar(
-                marked = marked,
-                onToggle = onToggleFavourite,
-                size = 24.dp,
-            )
+            // A match link has no catalogue channel behind it, so there is
+            // nothing on the viewer's list to mark.
+            if (favouriteable) {
+                FavouriteStar(
+                    marked = marked,
+                    onToggle = onToggleFavourite,
+                    size = 24.dp,
+                )
+            }
         }
 
         Box(
@@ -262,7 +372,7 @@ private fun WatchTopBar(
 
 /**
  * The band under the picture: the channel, the truth about the feed and the
- * two things a viewer can ask for.
+ * things a viewer can ask for.
  *
  * It is the site's channel band — the logo on a white plate, the name, the
  * category's own pill and the badge that says the picture is on — with the
@@ -272,6 +382,10 @@ private fun WatchTopBar(
 private fun WatchBand(
     channel: Channel,
     state: PlaybackState,
+    held: Boolean,
+    fullscreen: Boolean,
+    onTogglePause: () -> Unit,
+    onToggleFullscreen: () -> Unit,
     onSkipMirror: () -> Unit,
     onPickChannel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -298,7 +412,6 @@ private fun WatchBand(
             ChannelLogo(
                 channel = channel,
                 size = 56.dp,
-                shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, Slate700),
             )
 
@@ -347,13 +460,46 @@ private fun WatchBand(
             }
         }
 
-        // The two things a viewer can ask for while the picture is on.
+        // The things a viewer can ask for while the picture is on.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            BandButton(text = Copy.nextMirror(), onClick = onSkipMirror)
-            BandButton(text = Copy.channels(), onClick = onPickChannel)
+            BandIconButton(
+                label = if (held) Copy.playFeed() else Copy.pauseFeed(),
+                onClick = onTogglePause,
+            ) {
+                if (held) {
+                    PlayGlyph(tint = Accent, modifier = Modifier.fillMaxSize())
+                } else {
+                    PauseGlyph(tint = Accent, modifier = Modifier.fillMaxSize())
+                }
+            }
+
+            BandButton(
+                text = Copy.changeServer(),
+                onClick = onSkipMirror,
+                modifier = Modifier.weight(1f),
+            )
+
+            BandButton(
+                text = Copy.channelList(),
+                onClick = onPickChannel,
+                modifier = Modifier.weight(1f),
+            )
+
+            // The picture can take the whole screen, and can give it back.
+            BandIconButton(
+                label = if (fullscreen) Copy.leaveFullscreen() else Copy.fullscreen(),
+                onClick = onToggleFullscreen,
+            ) {
+                if (fullscreen) {
+                    LeaveFullscreenGlyph(tint = Accent, modifier = Modifier.fillMaxSize())
+                } else {
+                    FullscreenGlyph(tint = Accent, modifier = Modifier.fillMaxSize())
+                }
+            }
         }
     }
 }
@@ -405,7 +551,11 @@ private fun LivePill() {
 
 /** One of the buttons under the picture. */
 @Composable
-private fun BandButton(text: String, onClick: () -> Unit) {
+private fun BandButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val shape = RoundedCornerShape(8.dp)
     Text(
         text = text,
@@ -413,7 +563,7 @@ private fun BandButton(text: String, onClick: () -> Unit) {
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         maxLines = 1,
-        modifier = Modifier
+        modifier = modifier
             .clip(shape)
             .background(Panel)
             .border(1.dp, Slate800, shape)
@@ -421,3 +571,28 @@ private fun BandButton(text: String, onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 8.dp),
     )
 }
+
+/** The round button that holds the feed and lets it run again. */
+@Composable
+private fun BandIconButton(
+    label: String,
+    onClick: () -> Unit,
+    glyph: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Panel)
+            .border(1.dp, Slate800, CircleShape)
+            .clickable { onClick() }
+            .semantics { contentDescription = label }
+            .padding(9.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        glyph()
+    }
+}
+
+/** How long the hint about the gesture is on the screen. */
+private const val HINT_MS = 4500L

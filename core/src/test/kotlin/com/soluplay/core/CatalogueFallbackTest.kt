@@ -208,7 +208,7 @@ class CatalogueFallbackTest {
     fun `the backup address is tried when the primary does not answer`() = runBlocking {
         val transport = FakeTransport(
             mapOf(
-                "https://backup.test/api/channels" to liveCatalogue,
+                "https://backup.test/api/app/channels" to liveCatalogue,
             ),
         )
         val client = CatalogueClient(
@@ -220,7 +220,7 @@ class CatalogueFallbackTest {
 
         assertEquals(liveCatalogue, body)
         assertEquals(
-            listOf("https://primary.test/api/channels", "https://backup.test/api/channels"),
+            listOf("https://primary.test/api/app/channels", "https://backup.test/api/app/channels"),
             transport.requested,
         )
     }
@@ -229,8 +229,8 @@ class CatalogueFallbackTest {
     fun `the first address that answers is the one used`() = runBlocking {
         val transport = FakeTransport(
             mapOf(
-                "https://primary.test/api/channels" to liveCatalogue,
-                "https://backup.test/api/channels" to """{ "success": true, "channels": [] }""",
+                "https://primary.test/api/app/channels" to liveCatalogue,
+                "https://backup.test/api/app/channels" to """{ "success": true, "channels": [] }""",
             ),
         )
         val client = CatalogueClient(
@@ -240,15 +240,15 @@ class CatalogueFallbackTest {
 
         client.channelsJson()
 
-        assertEquals(listOf("https://primary.test/api/channels"), transport.requested)
+        assertEquals(listOf("https://primary.test/api/app/channels"), transport.requested)
     }
 
     @Test
     fun `an address that answers with nothing is passed over`() = runBlocking {
         val transport = FakeTransport(
             mapOf(
-                "https://primary.test/api/channels" to """{ "success": true, "count": 0, "channels": [] }""",
-                "https://backup.test/api/channels" to liveCatalogue,
+                "https://primary.test/api/app/channels" to """{ "success": true, "count": 0, "channels": [] }""",
+                "https://backup.test/api/app/channels" to liveCatalogue,
             ),
         )
         val client = CatalogueClient(
@@ -260,7 +260,7 @@ class CatalogueFallbackTest {
 
         assertEquals(liveCatalogue, body)
         assertEquals(
-            listOf("https://primary.test/api/channels", "https://backup.test/api/channels"),
+            listOf("https://primary.test/api/app/channels", "https://backup.test/api/app/channels"),
             transport.requested,
         )
     }

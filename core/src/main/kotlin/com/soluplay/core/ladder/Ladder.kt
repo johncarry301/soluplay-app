@@ -21,6 +21,9 @@ class Ladder(streams: List<StreamLink>) {
     /** How many mirrors have been handed out so far. */
     val position: Int get() = index
 
+    /** The mirrors that have not been handed out yet, in published order. */
+    fun remaining(): List<StreamLink> = ordered.drop(index)
+
     /** The next mirror in published order, or null when the ladder is spent. */
     fun next(): StreamLink? {
         val link = ordered.getOrNull(index) ?: return null

@@ -96,6 +96,14 @@ data class PlaybackState(
      * instance — so that a failure the copy does not cover can still be named.
      */
     val detail: String = "",
+    /**
+     * True while the feed is not running.
+     *
+     * The feed is held when the viewer asks for it and when the app is put
+     * away, so the screen can say that the picture is being held rather than
+     * that it has stopped.
+     */
+    val paused: Boolean = false,
 ) {
     /** True when there is a picture on screen. */
     val onAir: Boolean get() = phase == PlaybackPhase.ON_AIR

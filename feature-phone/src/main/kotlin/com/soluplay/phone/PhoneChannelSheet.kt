@@ -3,7 +3,6 @@ package com.soluplay.phone
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -34,20 +32,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.soluplay.core.browse.CATEGORY_FILTERS
 import com.soluplay.core.browse.CategoryFilter
 import com.soluplay.core.browse.channelsInFilter
 import com.soluplay.core.model.Channel
-import com.soluplay.core.ui.Accent
+import com.soluplay.core.ui.CategoryPillRow
 import com.soluplay.core.ui.Copy
 import com.soluplay.core.ui.LiveDot
 import com.soluplay.core.ui.Panel
 import com.soluplay.core.ui.PanelDeep
 import com.soluplay.core.ui.PanelMid
 import com.soluplay.core.ui.SiteChannelTile
-import com.soluplay.core.ui.Slate400
 import com.soluplay.core.ui.Slate800
-import com.soluplay.core.ui.Slate950
 
 /** How many channels stand side by side in the sheet, the way the site stands them. */
 private const val COLUMNS = 4
@@ -56,8 +51,9 @@ private const val COLUMNS = 4
  * The channels a viewer can switch to.
  *
  * It is the site's own panel: the name of the list, the categories as a row of
- * pills, and the channels as a grid of round plates. A tap takes the picture
- * to that channel.
+ * pills, and the channels as a grid of plates. The picture stays on the
+ * screen above the panel, so the viewer can still see the channel they are on
+ * while they pick another one. A tap takes the picture to that channel.
  */
 @Composable
 fun PhoneChannelSheet(
@@ -71,10 +67,11 @@ fun PhoneChannelSheet(
     val rows = remember(visible) { visible.chunked(COLUMNS) }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // The picture is still on the screen above the panel, so the panel is
+        // not drawn over it. A tap on the picture puts the panel away.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.65f))
                 .clickable { onDismiss() },
         )
 
@@ -116,19 +113,17 @@ fun PhoneChannelSheet(
                 )
             }
 
-            // The categories, as a row of pills.
+            // The categories, as a row of pills, all of them on one line.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(PanelDeep)
-                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                SheetPill(label = Copy.allChannels(), active = filter == null) { filter = null }
-                CATEGORY_FILTERS.forEach { category ->
-                    SheetPill(label = category.name, active = filter == category) { filter = category }
-                }
+                CategoryPillRow(
+                    selected = filter,
+                    onPick = { filter = it },
+                )
             }
 
             Box(
@@ -165,23 +160,4 @@ fun PhoneChannelSheet(
             }
         }
     }
-}
-
-/** One of the category pills in the sheet. */
-@Composable
-private fun SheetPill(label: String, active: Boolean, onPick: () -> Unit) {
-    val shape = RoundedCornerShape(8.dp)
-    Text(
-        text = label,
-        color = if (active) Slate950 else Slate400,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        modifier = Modifier
-            .clip(shape)
-            .background(if (active) Accent else PanelMid)
-            .then(if (active) Modifier else Modifier.border(1.dp, Slate800, shape))
-            .clickable { onPick() }
-            .padding(horizontal = 8.dp, vertical = 5.dp),
-    )
 }

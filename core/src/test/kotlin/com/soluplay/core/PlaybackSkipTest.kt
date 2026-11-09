@@ -140,7 +140,7 @@ class PlaybackSkipTest {
     }
 
     @Test
-    fun `a channel with one mirror has nowhere else to go`() {
+    fun `a channel with one mirror is tried again instead of being given up`() {
         val clock = Clock()
         val machine = PlaybackMachine(now = clock::now)
 
@@ -150,9 +150,80 @@ class PlaybackSkipTest {
 
         val skipped = machine.skipToNextMirror()
 
-        assertTrue("a mirror was tuned that is not published", skipped.preparedUrls().isEmpty())
-        assertTrue("the walk did not stop", skipped.last() is PlaybackCommand.Stop)
-        assertEquals(PlaybackPhase.EXHAUSTED, machine.state.phase)
+        assertEquals(
+            listOf("https://a.test/1.m3u8"),
+            skipped.preparedUrls(),
+        )
+        assertEquals(PlaybackPhase.TUNING, machine.state.phase)
+    }
+
+    @Test
+    fun `the walk goes back to the earlier mirrors one at a time`() {
+        val clock = Clock()
+        val machine = PlaybackMachine(now = clock::now)
+
+        val commands = machine.play(detail(
+            "https://a.test/1.m3u8",
+            "https://b.test/2.m3u8",
+            "https://c.test/3.m3u8",
+        ))
+
+        val attempts = commands.filterIsInstance<PlaybackCommand.Prepare>().map { it.attempt }
+        machine.onFirstFrame(attempts[0])
+
+        // The next published mirrors are raced, as they always are.
+        val second = machine.skipToNextMirror()
+        assertEquals(
+            listOf("https://b.test/2.m3u8", "https://c.test/3.m3u8"),
+            second.preparedUrls(),
+        )
+
+        // The mirror that won the race is given up and the last published
+        // mirror is tried.
+        machine.onFirstFrame(second.filterIsInstance<PlaybackCommand.Prepare>()[0].attempt)
+        val third = machine.skipToNextMirror()
+        assertEquals(listOf("https://c.test/3.m3u8"), third.preparedUrls())
+
+        // Nothing is left ahead, so the walk goes back to the first published
+        // mirror and the mirrors are tried one after another from then on.
+        machine.onFirstFrame(third.filterIsInstance<PlaybackCommand.Prepare>()[0].attempt)
+        val wrapped = machine.skipToNextMirror()
+        assertEquals(listOf("https://a.test/1.m3u8"), wrapped.preparedUrls())
+
+        machine.onFirstFrame(wrapped.filterIsInstance<PlaybackCommand.Prepare>()[0].attempt)
+        val next = machine.skipToNextMirror()
+        assertEquals(listOf("https://b.test/2.m3u8"), next.preparedUrls())
+    }
+
+    @Test
+    fun `the mirror that was left is tried last of all`() {
+        val clock = Clock()
+        val machine = PlaybackMachine(now = clock::now)
+
+        val commands = machine.play(detail(
+            "https://a.test/1.m3u8",
+            "https://b.test/2.m3u8",
+        ))
+
+        val attempts = commands.filterIsInstance<PlaybackCommand.Prepare>()
+        machine.onFirstFrame(attempts[0].attempt)
+
+        // The second published mirror is tried next.
+        val second = machine.skipToNextMirror()
+        assertEquals(listOf("https://b.test/2.m3u8"), second.preparedUrls())
+
+        machine.onFirstFrame(second.filterIsInstance<PlaybackCommand.Prepare>()[0].attempt)
+
+        // Nothing is left ahead, so the walk goes back to the first published
+        // mirror and not to the one the viewer has just left.
+        val wrapped = machine.skipToNextMirror()
+        assertEquals(listOf("https://a.test/1.m3u8"), wrapped.preparedUrls())
+
+        machine.onFirstFrame(wrapped.filterIsInstance<PlaybackCommand.Prepare>()[0].attempt)
+
+        // The mirror that was left is the one that is tried last of all.
+        val last = machine.skipToNextMirror()
+        assertEquals(listOf("https://b.test/2.m3u8"), last.preparedUrls())
     }
 
     @Test

@@ -1,9 +1,7 @@
 package com.soluplay.phone
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,28 +22,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.soluplay.core.browse.BrowseSnapshot
-import com.soluplay.core.browse.CATEGORY_FILTERS
 import com.soluplay.core.browse.CategoryFilter
 import com.soluplay.core.browse.allChannelsInOrder
 import com.soluplay.core.browse.channelsInFilter
 import com.soluplay.core.model.Channel
 import com.soluplay.core.model.Fixture
-import com.soluplay.core.ui.Accent
+import com.soluplay.core.ui.CategoryPillRow
 import com.soluplay.core.ui.Copy
 import com.soluplay.core.ui.Muted
 import com.soluplay.core.ui.Panel
 import com.soluplay.core.ui.PanelDeep
-import com.soluplay.core.ui.PanelMid
 import com.soluplay.core.ui.SiteChannelTile
 import com.soluplay.core.ui.SiteFixtureBoard
-import com.soluplay.core.ui.Slate400
 import com.soluplay.core.ui.Slate800
-import com.soluplay.core.ui.Slate950
 
 /** How many channels stand side by side, the way the site stands them. */
 private const val COLUMNS = 4
@@ -56,18 +48,17 @@ private const val COLUMNS = 4
  *
  * The guide is the site's guide: one flat grid in the order the server
  * published, the categories as a row of pills that filter it in place, and
- * every channel on a round white plate with its name underneath. A channel
+ * every channel on the same white plate with its name underneath. A channel
  * opens the watch screen, and a match opens the channel the board says it can
  * be watched on.
  *
- * A star on a channel says whether it is on the viewer's own list, and
- * tapping the star marks it without opening it.
+ * The guide shows the picture and the name and nothing else: the live dot and
+ * the star are the watch screen's business, and a grid of channels is easier
+ * to read when the plate carries nothing but the logo.
  */
 @Composable
 fun PhoneHomeScreen(
     snapshot: BrowseSnapshot,
-    marked: Set<String>,
-    onToggleFavourite: (Channel) -> Unit,
     onOpen: (Channel) -> Unit,
     onPickFixture: (Fixture) -> Unit,
 ) {
@@ -98,14 +89,11 @@ fun PhoneHomeScreen(
                 onPick = { filter = it },
             )
         }
-
         itemsIndexed(rows, key = { index, _ -> "row:$index" }) { index, row ->
             ChannelRow(
                 channels = row,
                 first = index == 0,
                 last = index == rows.lastIndex,
-                marked = marked,
-                onToggleFavourite = onToggleFavourite,
                 onPick = onOpen,
             )
         }
@@ -130,7 +118,8 @@ fun PhoneHomeScreen(
  * The row of pills that filters the guide.
  *
  * The pills sit on their own darker band, the way the site draws them, and
- * the one that is on is filled with the site's green.
+ * the one that is on is filled with the site's green. All of them are on one
+ * line: a filter a viewer has to scroll to find is a filter nobody uses.
  */
 @Composable
 private fun PillRow(
@@ -144,22 +133,11 @@ private fun PillRow(
             .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             .background(PanelDeep),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            FilterPill(label = Copy.allChannels(), active = selected == null) {
-                onPick(null)
-            }
-            CATEGORY_FILTERS.forEach { category ->
-                FilterPill(label = category.name, active = selected == category) {
-                    onPick(category)
-                }
-            }
-        }
+        CategoryPillRow(
+            selected = selected,
+            onPick = onPick,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+        )
 
         Box(
             modifier = Modifier
@@ -168,24 +146,6 @@ private fun PillRow(
                 .background(Slate800.copy(alpha = 0.6f)),
         )
     }
-}
-
-@Composable
-private fun FilterPill(label: String, active: Boolean, onPick: () -> Unit) {
-    val shape = RoundedCornerShape(8.dp)
-    Text(
-        text = label,
-        color = if (active) Slate950 else Slate400,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        modifier = Modifier
-            .clip(shape)
-            .background(if (active) Accent else PanelMid)
-            .then(if (active) Modifier else Modifier.border(1.dp, Slate800, shape))
-            .clickable { onPick() }
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-    )
 }
 
 /**
@@ -199,8 +159,6 @@ private fun ChannelRow(
     channels: List<Channel>,
     first: Boolean,
     last: Boolean,
-    marked: Set<String>,
-    onToggleFavourite: (Channel) -> Unit,
     onPick: (Channel) -> Unit,
 ) {
     val corners = RoundedCornerShape(
@@ -224,9 +182,8 @@ private fun ChannelRow(
         channels.forEach { channel ->
             SiteChannelTile(
                 channel = channel,
-                marked = channel.id in marked,
-                onToggleFavourite = { onToggleFavourite(channel) },
                 onPick = { onPick(channel) },
+                showLiveDot = false,
                 modifier = Modifier.weight(1f),
             )
         }

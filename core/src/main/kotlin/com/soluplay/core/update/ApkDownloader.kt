@@ -4,7 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
-import java.net.URL
+import com.soluplay.core.api.UrlConnectionTransport
 import java.security.MessageDigest
 
 /** Why a download did not become an installable file. */
@@ -40,7 +40,7 @@ sealed class DownloadResult {
  * than only on a device.
  */
 class ApkDownloader(
-    private val open: (String) -> InputStream = { URL(it).openStream() },
+    private val open: (String) -> InputStream = UrlConnectionTransport()::openStream,
 ) {
 
     suspend fun download(

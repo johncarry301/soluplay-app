@@ -4,7 +4,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.io.InputStream
-import java.net.HttpURLConnection
+import java.io.FilterInputStream
+import java.net.URI
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLSocketFactory
@@ -52,95 +53,105 @@ class UrlConnectionTransport(
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 12_000,
     private val sslSocketFactory: SSLSocketFactory? = null,
+    private val connectionFactory: (URL) -> HttpsURLConnection = {
+        it.openConnection() as HttpsURLConnection
+    },
 ) : HttpTransport, JsonPoster {
 
     override suspend fun get(url: String): String = withContext(Dispatchers.IO) {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "GET"
-            connection.connectTimeout = connectTimeoutMs
-            connection.readTimeout = readTimeoutMs
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            secureContext(connection)
-
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-
-            if (status !in 200..299) throw HttpStatusException(status, body)
-            body
-        } finally {
-            connection.disconnect()
-        }
+        request(url).bufferedReader().use { it.readText() }
     }
 
-    /**
-     * The one body the app posts to the site.
-     *
-     * The site's resolver is asked which video a channel is showing; nothing
-     * else is posted, and no credential is ever attached.
-     */
     override suspend fun postJson(url: String, body: String): String = withContext(Dispatchers.IO) {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.doOutput = true
-            connection.connectTimeout = connectTimeoutMs
-            connection.readTimeout = readTimeoutMs
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("User-Agent", USER_AGENT)
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            secureContext(connection)
+        request(url, body).bufferedReader().use { it.readText() }
+    }
 
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+    /** Downloads may follow HTTPS CDN redirects; API requests remain same-origin. */
+    fun openStream(url: String): InputStream = request(url, download = true)
 
-            if (status !in 200..299) throw HttpStatusException(status, text)
-            text
-        } finally {
-            connection.disconnect()
+    private fun request(url: String, body: String? = null, download: Boolean = false): InputStream {
+        val origin = requireSecureUrl(url)
+        var target = origin
+        var redirects = 0
+        while (true) {
+            val connection = connectionFactory(target)
+            var handedOff = false
+            try {
+                connection.instanceFollowRedirects = false
+                connection.connectTimeout = connectTimeoutMs
+                connection.readTimeout = readTimeoutMs
+                // Configure trust before any operation that can connect, especially outputStream.
+                sslSocketFactory?.let { connection.sslSocketFactory = it }
+                // Keep the platform hostname verifier intact.
+                connection.requestMethod = if (body == null) "GET" else "POST"
+                connection.setRequestProperty("Accept", if (download) "*/*" else "application/json")
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                if (body != null) {
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/json")
+                    connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+                }
+                val status = connection.responseCode
+                if (status in REDIRECT_STATUSES) {
+                    // Close the redirect response even when its target or semantics are refused.
+                    connection.inputStream.close()
+                    if (body != null && status != 307 && status != 308) {
+                        throw IOException("Unsafe POST redirect")
+                    }
+                    if (redirects >= MAX_REDIRECTS) throw IOException("Too many redirects")
+                    val location = connection.getHeaderField("Location")
+                        ?.takeIf { it.isNotBlank() } ?: throw IOException("Missing redirect location")
+                    val next = requireSecureUrl(URL(target, location).toExternalForm())
+                    if (!download && !sameOrigin(origin, next)) throw IOException("Cross-origin API redirect")
+                    target = next
+                    redirects++
+                    continue
+                }
+                if (status !in 200..299) {
+                    val text = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    throw HttpStatusException(status, text)
+                }
+                val input = connection.inputStream
+                val result = object : FilterInputStream(input) {
+                    override fun close() {
+                        try {
+                            super.close()
+                        } finally {
+                            connection.disconnect()
+                        }
+                    }
+                }
+                handedOff = true
+                return result
+            } finally {
+                if (!handedOff) connection.disconnect()
+            }
         }
     }
 
-    /**
-     * The secure context this connection is made with.
-     *
-     * A plain HTTP connection has none, and saying so is cheaper than asking.
-     */
-    private fun secureContext(connection: HttpURLConnection) {
-        val factory = sslSocketFactory ?: return
-        if (connection is HttpsURLConnection) connection.sslSocketFactory = factory
-    }
-
-    /**
-     * Opens a stream to an address, with this transport's secure context.
-     *
-     * A file that is fetched rather than read as a body — a build to install —
-     * is opened this way, so it goes through the same repair as everything
-     * else. A television whose trust store was never updated could read the
-     * manifest and then fail to fetch the file that carries the repair.
-     */
-    fun openStream(url: String): InputStream {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = connectTimeoutMs
-        connection.readTimeout = readTimeoutMs
-        connection.setRequestProperty("Accept", "*/*")
-        connection.setRequestProperty("User-Agent", USER_AGENT)
-        secureContext(connection)
-
-        val status = connection.responseCode
-        if (status !in 200..299) {
-            connection.disconnect()
-            throw HttpStatusException(status, "")
-        }
-        return connection.inputStream
-    }
+    private fun sameOrigin(first: URL, second: URL): Boolean =
+        first.protocol.equals(second.protocol, ignoreCase = true) &&
+            first.host.equals(second.host, ignoreCase = true) &&
+            (if (first.port == -1) first.defaultPort else first.port) ==
+            (if (second.port == -1) second.defaultPort else second.port)
 
     companion object {
+        internal const val MAX_REDIRECTS = 5
+        private val REDIRECT_STATUSES = setOf(301, 302, 303, 307, 308)
+
+        internal fun requireSecureUrl(value: String): URL {
+            val uri = try {
+                URI(value)
+            } catch (error: Exception) {
+                throw IOException("Invalid HTTPS URL", error)
+            }
+            if (!uri.scheme.equals("https", ignoreCase = true) ||
+                uri.host.isNullOrBlank() || uri.rawUserInfo != null ||
+                uri.port < -1 || uri.port > 65535
+            ) throw IOException("A credential-free HTTPS URL is required")
+            return uri.toURL()
+        }
+
         /**
          * The site's own contract hides the download banner from this client,
          * so the app never sees a promo for itself.

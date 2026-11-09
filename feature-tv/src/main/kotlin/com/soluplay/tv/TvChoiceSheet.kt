@@ -38,9 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.soluplay.core.fixtures.playableChoices
+import com.soluplay.core.fixtures.FixtureOption
+import com.soluplay.core.fixtures.openableOptions
 import com.soluplay.core.model.Fixture
-import com.soluplay.core.model.FixtureChoice
 import com.soluplay.core.ui.Accent
 import com.soluplay.core.ui.Background
 import com.soluplay.core.ui.Copy
@@ -49,23 +49,24 @@ import com.soluplay.core.ui.Muted
 import com.soluplay.core.ui.Panel
 
 /**
- * The channels a match card can be watched on.
+ * The things a match card can be watched on.
  *
- * A card with one channel opens it, a card with several asks, and a card with
- * none says so instead of opening nothing.
+ * A card with one opens it, a card with several asks, and a card with none
+ * says so instead of opening nothing. The match's own broadcast link is one
+ * more row beside its channels, last in the order the admin set.
  */
 @Composable
 fun TvChoiceSheet(
     fixture: Fixture,
-    onPick: (FixtureChoice) -> Unit,
+    onPick: (FixtureOption) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val choices = remember(fixture) { playableChoices(fixture) }
-    val requesters = remember(choices) { choices.map { FocusRequester() } }
+    val options = remember(fixture) { openableOptions(fixture) }
+    val requesters = remember(options) { options.map { FocusRequester() } }
     val scope = rememberCoroutineScope()
 
-    // The sheet answers for itself: the first channel is where the remote
-    // lands when the sheet opens.
+    // The sheet answers for itself: the first row is where the remote lands
+    // when the sheet opens.
     LaunchedEffect(fixture) {
         requesters.firstOrNull()?.askForFocus(scope)
     }
@@ -96,16 +97,30 @@ fun TvChoiceSheet(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            if (choices.isEmpty()) {
+            if (options.isEmpty()) {
                 Text(text = Copy.nothingToOpen(), color = Muted, fontSize = 20.sp)
             } else {
                 Text(text = Copy.chooseChannel(), color = Muted, fontSize = 18.sp)
-                choices.forEachIndexed { index, choice ->
-                    TvChoiceRow(
-                        choice = choice,
-                        requester = requesters.getOrNull(index),
-                        onPick = { onPick(choice) },
-                    )
+                options.forEachIndexed { index, option ->
+                    when (option) {
+                        is FixtureOption.Channel -> TvChoiceRow(
+                            title = option.choice.name,
+                            subtitle = option.choice.category,
+                            logoUrl = option.choice.logoUrl,
+                            fallbackText = option.choice.name,
+                            requester = requesters.getOrNull(index),
+                            onPick = { onPick(option) },
+                        )
+
+                        is FixtureOption.MatchLink -> TvChoiceRow(
+                            title = Copy.directBroadcast(),
+                            subtitle = Copy.matchLink(),
+                            logoUrl = null,
+                            fallbackText = "",
+                            requester = requesters.getOrNull(index),
+                            onPick = { onPick(option) },
+                        )
+                    }
                 }
             }
 
@@ -122,10 +137,13 @@ fun TvChoiceSheet(
     }
 }
 
-/** One channel on the choice sheet, walked with the remote. */
+/** One thing on the choice sheet, walked with the remote. */
 @Composable
 private fun TvChoiceRow(
-    choice: FixtureChoice,
+    title: String,
+    subtitle: String,
+    logoUrl: String?,
+    fallbackText: String,
     requester: FocusRequester?,
     onPick: () -> Unit,
 ) {
@@ -156,24 +174,35 @@ private fun TvChoiceRow(
             modifier = Modifier.size(56.dp),
             contentAlignment = Alignment.Center,
         ) {
-            LogoPlate(
-                url = choice.logoUrl,
-                fallbackText = choice.name,
-                size = 56.dp,
-                modifier = Modifier.fillMaxSize(),
-            )
+            if (logoUrl != null) {
+                LogoPlate(
+                    url = logoUrl,
+                    fallbackText = fallbackText,
+                    size = 56.dp,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                // The match link has no channel picture: the mark says it plays,
+                // rather than standing in a logo-shaped hole.
+                Text(
+                    text = "▶",
+                    color = Accent,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
         }
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = choice.name,
+                text = title,
                 color = Color.White,
                 fontSize = 22.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = choice.category,
+                text = subtitle,
                 color = Muted,
                 fontSize = 18.sp,
                 maxLines = 1,

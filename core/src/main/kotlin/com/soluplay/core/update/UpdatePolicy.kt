@@ -42,6 +42,13 @@ data class UpdateDecision(
  */
 object UpdatePolicy {
 
+    private fun isSecureUrl(url: String): Boolean = try {
+        com.soluplay.core.api.UrlConnectionTransport.requireSecureUrl(url)
+        true
+    } catch (_: java.io.IOException) {
+        false
+    }
+
     /**
      * How long a mandatory update may be ignored before it stops playback.
      *
@@ -64,7 +71,7 @@ object UpdatePolicy {
     ): UpdateOffer? {
         val variant = manifest.variants[surface]
         val url = variant?.url?.takeIf { it.isNotBlank() } ?: manifest.assetUrl
-        if (url.isBlank()) return null
+        if (!isSecureUrl(url)) return null
         if (manifest.versionCode <= 0) return null
 
         return UpdateOffer(
@@ -156,7 +163,7 @@ object UpdatePolicy {
         firstSeenAt: Long,
         now: Long,
     ): UpdateDecision {
-        if (offer == null) return UpdateDecision()
+        if (offer == null || !isSecureUrl(offer.url)) return UpdateDecision()
         if (!isNewer(offer, currentVersionCode)) return UpdateDecision()
         if (!inRollout(offer.rolloutPercent, installId)) return UpdateDecision()
 

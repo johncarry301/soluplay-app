@@ -4,20 +4,38 @@ import com.soluplay.core.model.Fixture
 import com.soluplay.core.model.FixtureChoice
 
 /**
+ * One thing a match card can be opened on: a catalogue channel, or the
+ * match's own broadcast link.
+ *
+ * The link is published beside the channels and is offered the same way, so a
+ * card's rule — one thing opens, several ask, none says so — does not have to
+ * know which kind it is counting.
+ */
+sealed interface FixtureOption {
+
+    /** A catalogue channel, played from its own ladder. */
+    data class Channel(val choice: FixtureChoice) : FixtureOption
+
+    /** The match's own address, played as a one-mirror ladder. */
+    data class MatchLink(val url: String) : FixtureOption
+}
+
+/**
  * What a match card can be opened on.
  *
  * The board publishes the channels a card can be watched on, each with the
- * state that says whether it can be opened right now. Only a card with
- * something openable is worth a tap, and a card with more than one thing to
- * choose from has to ask before it opens.
+ * state that says whether it can be opened right now, and possibly one address
+ * for the match itself. Only a card with something openable is worth a tap,
+ * and a card with more than one thing to choose from has to ask before it
+ * opens.
  */
 sealed interface FixtureTarget {
 
     /** One thing to open: the tap goes straight there. */
-    data class Open(val choice: FixtureChoice) : FixtureTarget
+    data class Open(val option: FixtureOption) : FixtureTarget
 
     /** More than one thing to open: the viewer chooses. */
-    data class Choose(val choices: List<FixtureChoice>) : FixtureTarget
+    data class Choose(val options: List<FixtureOption>) : FixtureTarget
 
     /** Nothing on the card can be opened. */
     data object None : FixtureTarget
@@ -36,18 +54,31 @@ fun playableChoices(fixture: Fixture): List<FixtureChoice> =
     }
 
 /**
+ * Everything on the card the app can open, in the order the admin set: the
+ * ready direct channels, then the match's own broadcast link.
+ *
+ * The link is last because it belongs to the match rather than to the guide,
+ * and the channels are what a viewer already knows how to pick from.
+ */
+fun openableOptions(fixture: Fixture): List<FixtureOption> {
+    val options = playableChoices(fixture).map { FixtureOption.Channel(it) }
+    val link = fixture.directUrl.trim()
+    return if (link.isEmpty()) options else options + FixtureOption.MatchLink(link)
+}
+
+/**
  * Where a tap on a match card goes.
  *
- * One openable choice is opened. Several are offered. None is a card that
+ * One openable option is opened. Several are offered. None is a card that
  * cannot be watched from here, and the screen says so rather than opening
  * nothing.
  */
 fun fixtureTarget(fixture: Fixture): FixtureTarget {
-    val choices = playableChoices(fixture)
+    val options = openableOptions(fixture)
     return when {
-        choices.isEmpty() -> FixtureTarget.None
-        choices.size == 1 -> FixtureTarget.Open(choices.first())
-        else -> FixtureTarget.Choose(choices)
+        options.isEmpty() -> FixtureTarget.None
+        options.size == 1 -> FixtureTarget.Open(options.first())
+        else -> FixtureTarget.Choose(options)
     }
 }
 

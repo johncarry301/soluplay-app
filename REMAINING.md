@@ -122,6 +122,45 @@ same flag on the same match, and the watch page wears the site's chrome. The
 
 ---
 
+## The HTTP/HTTPS split and builds that are already installed — added 2026-11-07
+
+The site answers two audiences. `/api/channels` and `/api/channels/:id` are
+the browser's routes: they publish HTTPS links only, and they withhold a link
+the probe marked as browser-blocked (a missing CORS grant, or headers a
+browser may not send). `/api/app/channels` and `/api/app/channels/:id` are the
+app's routes and publish both protocols. The working tree's
+`ApiConfig.CHANNELS_PATH` now names the app's route.
+
+**What this means for installed builds (versionCode 3 and older).** Their
+`ApiConfig` asked for `/api/channels`, so they are served the browser's list.
+They keep working, but an HTTP-only mirror is no longer offered to them, and a
+link whose only obstacle was a browser rule is withheld even though the app
+could play it. On 2026-11-07 the live catalogue held 158 channels and every one
+had an HTTPS primary, so no channel disappeared from the guide; the ladder's
+tail is shorter for old installs.
+
+**The migration, in order.**
+
+1. **Deploy the site first.** The new build asks for `/api/app/channels` and
+   does not fall back to the older path; until the route is deployed the guide
+   read fails and the app shows its saved copy or the baked seed.
+2. **Publish a new build.** Bump `versionCode` 3 → 4 and `versionName` 0.2.1 →
+   0.2.2 (a build with the same number is never offered), then run the existing
+   tag job with the same key. The tree also carries the HTTPS-only
+   `HttpTransport` and `UpdatePolicy` checks, which the published `0.2.1` does
+   not have.
+3. **Installed builds 3 and older are then offered 4.** To retire them, set
+   `minSupportedVersionCode` to 4 in the published manifest: the next read
+   blocks playback until 4 is installed (the `RETIRED` path, with no grace).
+   Leaving it at 0 keeps the old builds playable.
+
+Until step 2 happens nothing is forced: the live manifest names
+`versionCode` 3, `minSupportedVersionCode` 0 and `mandatory` false, so an
+install has no newer build to take. Nothing has been tagged, pushed or
+deployed for this change; the source and local builds are on this machine only.
+
+---
+
 ## Things that only the owner can supply
 
 1. **The release keystore passphrase** (Phase 0).

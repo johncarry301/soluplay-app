@@ -52,7 +52,7 @@ object Copy {
 
     @Composable fun todaysMatches() = text("আজকের ম্যাচ", "Today's matches")
 
-    @Composable fun channels() = text("চ্যানেল", "Channels")
+    @Composable fun channelList() = text("চ্যানেল তালিকা", "channel list")
 
     @Composable fun mirrors(count: Int) = text("${count}টি মিরর", "$count mirrors")
 
@@ -87,7 +87,12 @@ object Copy {
 
     @Composable fun back() = text("ফিরে যান", "Back")
 
-    @Composable fun chooseChannel() = text("চ্যানেল বেছে নিন", "Choose a channel")
+    @Composable fun chooseChannel() = text("কোথায় দেখবেন?", "Where to watch?")
+
+    /** The match's own broadcast address, offered beside its channels. */
+    @Composable fun directBroadcast() = text("সরাসরি সম্প্রচার", "Direct broadcast")
+
+    @Composable fun matchLink() = text("ম্যাচ লিংক", "Match link")
 
     @Composable fun nothingToOpen() = text(
         "এই ম্যাচটি এখান থেকে খোলা যাচ্ছে না।",
@@ -208,11 +213,26 @@ object Copy {
 
     @Composable fun nextMirror() = text("অন্য মিরর", "Another mirror")
 
+    @Composable fun changeServer() = text("সার্ভার পরিবর্তন", "Change Server")
+
     @Composable fun heldFeed() = text("ফিড থামানো হয়েছে", "The feed is held")
 
     @Composable fun holdFeed() = text("ফিড থামান", "Hold the feed")
 
     @Composable fun resumeFeed() = text("ফিড চালু করুন", "Resume the feed")
+
+    @Composable fun pauseFeed() = text("থামান", "Pause")
+
+    @Composable fun playFeed() = text("চালু করুন", "Play")
+
+    @Composable fun fullscreen() = text("পূর্ণ পর্দা", "Full screen")
+
+    @Composable fun leaveFullscreen() = text("পর্দা থেকে বের হন", "Leave full screen")
+
+    @Composable fun swipeHint() = text(
+        "উপরে-নিচে সোয়াইপ করে চ্যানেল বদলান",
+        "Swipe up or down to change the channel",
+    )
 
     @Composable fun englishToggle() = text("EN", "EN")
 

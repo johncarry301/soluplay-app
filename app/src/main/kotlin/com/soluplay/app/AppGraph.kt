@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.AssetManager
 import android.os.Build
 import com.soluplay.app.net.TlsSetup
+import com.soluplay.app.player.Media3PlaybackHost
 import com.soluplay.app.update.ApkInstaller
 import com.soluplay.app.update.UpdateStore
 import com.soluplay.app.update.UpdateViewModelFactory
@@ -51,11 +52,34 @@ object AppGraph {
     @Volatile
     private var socketFactory: SSLSocketFactory? = null
 
+    /**
+     * The player, made once for as long as the app runs.
+     *
+     * The picture outlives the screen that shows it: turning the phone on its
+     * side makes the activity again, and a player that belonged to the old
+     * activity would take the picture with it. So the player belongs to the
+     * app, and the screen only borrows it.
+     */
+    @Volatile
+    private var playbackHost: Media3PlaybackHost? = null
+
     fun repository(context: Context): CatalogueRepository = CatalogueRepository(
         source = CatalogueClient(transport = transport()),
         cache = FileCatalogueCache(File(context.filesDir, CACHE_DIRECTORY)),
         seed = AssetsSeedProvider(context.assets, SEED_FILE),
     )
+
+    /**
+     * The player every screen shares.
+     *
+     * It is made once and kept, so the picture a viewer is watching is still
+     * there after the phone is turned.
+     */
+    fun host(context: Context): Media3PlaybackHost =
+        playbackHost ?: synchronized(this) {
+            playbackHost ?: Media3PlaybackHost(context.applicationContext)
+                .also { playbackHost = it }
+        }
 
     /** The transport the app's own traffic goes through. */
     fun transport(): UrlConnectionTransport = UrlConnectionTransport(sslSocketFactory = socketFactory)

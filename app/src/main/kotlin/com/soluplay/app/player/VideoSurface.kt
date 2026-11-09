@@ -19,7 +19,9 @@ import androidx.media3.common.VideoSize
  * that is brought to the front is the one on the screen.
  *
  * The frame is letterboxed the way the web player letterboxes it: the picture
- * keeps its own proportions and is fitted inside the frame, never cropped.
+ * keeps its own proportions and is fitted inside the frame, never cropped —
+ * unless the picture is asked to cover the frame, which is what the full
+ * screen does.
  */
 class VideoSurface(context: Context) : FrameLayout(context) {
 
@@ -59,6 +61,10 @@ class VideoSurface(context: Context) : FrameLayout(context) {
         if (videoWidth <= 0 || videoHeight <= 0) return
         if (width <= 0 || height <= 0) return
 
+        // The picture is fitted, never cropped: a channel is published whole,
+        // and the viewer is watching all of it. Where the phone's own shape
+        // does not match the channel's, the difference is left as a bar
+        // rather than cut off the picture.
         val scale = minOf(width.toFloat() / videoWidth, height.toFloat() / videoHeight)
         val fittedWidth = (videoWidth * scale).toInt().coerceAtLeast(1)
         val fittedHeight = (videoHeight * scale).toInt().coerceAtLeast(1)

@@ -50,6 +50,18 @@ interface PlaybackHost {
     /** Lets the picture of this try at playing run again. */
     fun resume(attempt: Long)
 
+    /**
+     * Holds every picture that is being tried.
+     *
+     * Every mirror in a race has a player of its own, and any one of them can
+     * be the one making a sound — so the app being put away holds all of
+     * them, and not only the one on the screen.
+     */
+    fun pauseAll()
+
+    /** Lets every picture that is being tried run again. */
+    fun resumeAll()
+
     /** Stops playing and clears the picture. */
     fun stop()
 

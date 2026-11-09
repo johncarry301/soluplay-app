@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.soluplay.core.browse.CatalogueRepository
+import com.soluplay.core.model.ChannelDetail
+import com.soluplay.core.model.StreamLink
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +29,21 @@ class PlaybackViewModel(
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
+    /** True while the viewer is holding the feed. */
+    private var pausedByViewer = false
+
+    /** True while the app is away and the feed is stopped for that reason. */
+    private var pausedByBackground = false
+
+    /**
+     * The session whose ladder was read a second time.
+     *
+     * The ladder is read again when a channel runs out of mirrors, but only
+     * once: a second reading that has nothing to play either is the answer,
+     * and the screen says so.
+     */
+    private var refreshedSession = 0L
+
     init {
         host.listener = this
         viewModelScope.launch {
@@ -49,7 +66,15 @@ class PlaybackViewModel(
      * to a session that is over and is dropped.
      */
     fun open(channelId: String, channelName: String, logoUrl: String) {
+        // The channel that was on the screen is let go of at once. Its picture
+        // and its sound go away before the next one is tuned, so the two are
+        // never on the screen together and the old picture cannot sit on top
+        // of the new one while it is being tuned.
+        host.stop()
+
         val session = machine.beginSession(channelId, channelName, logoUrl)
+        pausedByViewer = false
+        pausedByBackground = false
         publish()
 
         viewModelScope.launch {
@@ -63,8 +88,60 @@ class PlaybackViewModel(
             }
 
             apply(machine.start(detail, session))
+            rehold()
             publish()
         }
+    }
+
+    /**
+     * Plays the match's own broadcast link.
+     *
+     * The board publishes one address for the match itself, already checked as
+     * an HTTPS link, so there is no ladder to read and nothing to rank: the
+     * link is the whole ladder, and the same machine walks it — a first-frame
+     * proof, a stall watchdog and a place on the screen — exactly as it does a
+     * catalogue channel.
+     *
+     * `channelId`, `channelName` and `logoUrl` are only the identity the screen
+     * shows; nothing about them is read from the catalogue.
+     */
+    fun openDirect(channelId: String, url: String, channelName: String, logoUrl: String) {
+        host.stop()
+
+        val session = machine.beginSession(channelId, channelName, logoUrl)
+        pausedByViewer = false
+        pausedByBackground = false
+        publish()
+
+        val detail = ChannelDetail(
+            id = channelId,
+            name = channelName,
+            logo = logoUrl,
+            streams = listOf(
+                StreamLink(
+                    id = DIRECT_LINK_STREAM_ID,
+                    url = url,
+                    priority = 1,
+                    status = "active",
+                ),
+            ),
+        )
+        apply(machine.start(detail, session))
+        rehold()
+        publish()
+    }
+
+    /**
+     * Holds the feed again after a ladder was started.
+     *
+     * Starting the walk forgets who was holding the feed, so a viewer who has
+     * put the phone down would get the sound back the moment the ladder
+     * arrives. The hold is put back before the screen is told anything.
+     */
+    private fun rehold() {
+        if (!pausedByViewer && !pausedByBackground) return
+        machine.hold()
+        host.pauseAll()
     }
 
     /** The viewer left the watch screen. */
@@ -93,13 +170,47 @@ class PlaybackViewModel(
      * than a frozen picture.
      */
     fun setPaused(paused: Boolean) {
-        val attempt = machine.currentAttempt
-        if (paused) {
+        pausedByViewer = paused
+        applyPause()
+        publish()
+    }
+
+    /**
+     * The app was put away.
+     *
+     * The feed stops: a phone that is locked, or an app that is minimised,
+     * must not keep playing a sound into the background. The picture is not
+     * given up — the decoder is only paused — so the channel is where it was
+     * when the viewer comes back.
+     */
+    fun enterBackground() {
+        if (pausedByBackground) return
+        pausedByBackground = true
+        applyPause()
+        publish()
+    }
+
+    /** The app came back to the front. */
+    fun exitBackground() {
+        if (!pausedByBackground) return
+        pausedByBackground = false
+        applyPause()
+        publish()
+    }
+
+    /**
+     * Holds or releases the feed, according to who is asking for it.
+     *
+     * The feed is held while the viewer is holding it and while the app is
+     * away, and it runs again only when neither of them is holding it.
+     */
+    private fun applyPause() {
+        if (pausedByViewer || pausedByBackground) {
             machine.hold()
-            host.pause(attempt)
+            host.pauseAll()
         } else {
             machine.releaseHold()
-            host.resume(attempt)
+            host.resumeAll()
         }
     }
 
@@ -152,7 +263,47 @@ class PlaybackViewModel(
         if (host.isBuffering(attempt)) machine.onStall(attempt)
         machine.onPosition(host.currentPositionMs(attempt))
         apply(machine.onTick())
+        refreshLadderIfNeeded()
         publish()
+    }
+
+    /**
+     * The channel's list of mirrors is read again when there is nothing left
+     * to play.
+     *
+     * A channel that was publishing a mirror a minute ago may be publishing it
+     * again now, so the list is read once more and the walk is started again
+     * with it — that is what the site's own page does when it refreshes. While
+     * the list is on its way the screen says so rather than saying the
+     * channel is dead, and if the second reading has nothing to play either,
+     * the screen keeps the truth it has and says that no mirror is sending a
+     * picture.
+     */
+    private fun refreshLadderIfNeeded() {
+        val state = machine.state
+        if (state.phase != PlaybackPhase.EXHAUSTED) return
+        if (refreshedSession == machine.session) return
+        refreshedSession = machine.session
+
+        val channelId = state.channelId
+        val session = machine.session
+
+        machine.beginRefresh()
+
+        viewModelScope.launch {
+            val detail = repository.liveChannelDetail(channelId)
+            if (!machine.isCurrentSession(session)) return@launch
+
+            if (detail == null) {
+                machine.fail(FailoverReason.LADDER_UNREADABLE)
+                publish()
+                return@launch
+            }
+
+            apply(machine.start(detail, session))
+            rehold()
+            publish()
+        }
     }
 
     private fun apply(commands: List<PlaybackCommand>) {
@@ -173,6 +324,9 @@ class PlaybackViewModel(
     private companion object {
         /** How often the deadlines are checked and the player's clock read. */
         const val POLL_INTERVAL_MS = 500L
+
+        /** The one mirror a match link is played as; it matches no catalogue row. */
+        const val DIRECT_LINK_STREAM_ID = "match-direct"
     }
 }
 

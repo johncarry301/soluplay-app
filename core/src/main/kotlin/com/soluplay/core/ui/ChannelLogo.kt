@@ -45,9 +45,9 @@ import com.soluplay.core.model.Channel
  * A channel whose logo cannot be fetched is still a channel, so the first
  * letter of its name stands in.
  *
- * The site draws the plate as a circle on its phone grid, so the phone asks
- * for that shape and the television keeps the rounded square it has always
- * had.
+ * The plate is one shape everywhere — the same rounded square on the grid, in
+ * the search and under the picture — so a channel looks the same on every
+ * screen and a grid of them reads as one grid.
  */
 @Composable
 fun ChannelLogo(
@@ -87,6 +87,7 @@ fun LogoPlate(
 ) {
     Box(
         modifier = modifier
+            .clip(shape)
             .background(LogoPlateBackground, shape)
             .then(
                 if (border == null) {

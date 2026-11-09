@@ -1,5 +1,6 @@
 package com.soluplay.core
 
+import com.soluplay.core.fixtures.FixtureOption
 import com.soluplay.core.fixtures.FixtureTarget
 import com.soluplay.core.fixtures.fixtureTarget
 import com.soluplay.core.fixtures.playableChoices
@@ -46,7 +47,9 @@ class FixtureChoicesTest {
         val target = fixtureTarget(fixture(choice("a1")))
 
         assertTrue(target is FixtureTarget.Open)
-        assertEquals("a1", (target as FixtureTarget.Open).choice.channelId)
+        val option = (target as FixtureTarget.Open).option
+        assertTrue(option is FixtureOption.Channel)
+        assertEquals("a1", (option as FixtureOption.Channel).choice.channelId)
     }
 
     @Test
@@ -54,7 +57,7 @@ class FixtureChoicesTest {
         val target = fixtureTarget(fixture(choice("a1"), choice("a2")))
 
         assertTrue(target is FixtureTarget.Choose)
-        assertEquals(2, (target as FixtureTarget.Choose).choices.size)
+        assertEquals(2, (target as FixtureTarget.Choose).options.size)
     }
 
     @Test
@@ -90,5 +93,44 @@ class FixtureChoicesTest {
         )
 
         assertEquals(listOf("a1", "a4"), open.map { it.channelId })
+    }
+
+    @Test
+    fun `a channel and the match link together make the card ask`() {
+        val target = fixtureTarget(
+            fixture(choice("a1")).copy(directUrl = "https://cdn.example/live.m3u8"),
+        )
+
+        assertTrue(target is FixtureTarget.Choose)
+        val options = (target as FixtureTarget.Choose).options
+        assertEquals(2, options.size)
+        assertTrue(options[0] is FixtureOption.Channel)
+        assertTrue(options[1] is FixtureOption.MatchLink)
+        assertEquals(
+            "https://cdn.example/live.m3u8",
+            (options[1] as FixtureOption.MatchLink).url,
+        )
+    }
+
+    @Test
+    fun `a match link on its own opens the link`() {
+        val target = fixtureTarget(
+            fixture().copy(directUrl = "https://cdn.example/live.m3u8"),
+        )
+
+        assertTrue(target is FixtureTarget.Open)
+        val option = (target as FixtureTarget.Open).option
+        assertEquals(
+            "https://cdn.example/live.m3u8",
+            (option as FixtureOption.MatchLink).url,
+        )
+    }
+
+    @Test
+    fun `a blank match link is not an option`() {
+        val target = fixtureTarget(fixture(choice("a1")).copy(directUrl = "   "))
+
+        assertTrue(target is FixtureTarget.Open)
+        assertTrue((target as FixtureTarget.Open).option is FixtureOption.Channel)
     }
 }

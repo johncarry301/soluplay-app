@@ -23,9 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.soluplay.core.fixtures.playableChoices
+import com.soluplay.core.fixtures.FixtureOption
+import com.soluplay.core.fixtures.openableOptions
 import com.soluplay.core.model.Fixture
-import com.soluplay.core.model.FixtureChoice
 import com.soluplay.core.ui.Accent
 import com.soluplay.core.ui.Background
 import com.soluplay.core.ui.Copy
@@ -34,18 +34,19 @@ import com.soluplay.core.ui.Muted
 import com.soluplay.core.ui.Panel
 
 /**
- * The channels a match card can be watched on.
+ * The things a match card can be watched on.
  *
- * A card with one channel opens it, a card with several asks, and a card with
- * none says so instead of opening nothing.
+ * A card with one opens it, a card with several asks, and a card with none
+ * says so instead of opening nothing. The match's own broadcast link is one
+ * more row beside its channels, last in the order the admin set.
  */
 @Composable
 fun PhoneChoiceSheet(
     fixture: Fixture,
-    onPick: (FixtureChoice) -> Unit,
+    onPick: (FixtureOption) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val choices = playableChoices(fixture)
+    val options = openableOptions(fixture)
 
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -73,7 +74,7 @@ fun PhoneChoiceSheet(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            if (choices.isEmpty()) {
+            if (options.isEmpty()) {
                 Text(
                     text = Copy.nothingToOpen(),
                     color = Muted,
@@ -85,8 +86,24 @@ fun PhoneChoiceSheet(
                     color = Muted,
                     fontSize = 12.sp,
                 )
-                choices.forEach { choice ->
-                    ChoiceRow(choice = choice, onPick = { onPick(choice) })
+                options.forEach { option ->
+                    when (option) {
+                        is FixtureOption.Channel -> ChoiceRow(
+                            title = option.choice.name,
+                            subtitle = option.choice.category,
+                            logoUrl = option.choice.logoUrl,
+                            fallbackText = option.choice.name,
+                            onPick = { onPick(option) },
+                        )
+
+                        is FixtureOption.MatchLink -> ChoiceRow(
+                            title = Copy.directBroadcast(),
+                            subtitle = Copy.matchLink(),
+                            logoUrl = null,
+                            fallbackText = "",
+                            onPick = { onPick(option) },
+                        )
+                    }
                 }
             }
 
@@ -105,7 +122,13 @@ fun PhoneChoiceSheet(
 }
 
 @Composable
-private fun ChoiceRow(choice: FixtureChoice, onPick: () -> Unit) {
+private fun ChoiceRow(
+    title: String,
+    subtitle: String,
+    logoUrl: String?,
+    fallbackText: String,
+    onPick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -120,24 +143,35 @@ private fun ChoiceRow(choice: FixtureChoice, onPick: () -> Unit) {
                 .height(40.dp),
             contentAlignment = Alignment.Center,
         ) {
-            LogoPlate(
-                url = choice.logoUrl,
-                fallbackText = choice.name,
-                size = 40.dp,
-                modifier = Modifier.fillMaxSize(),
-            )
+            if (logoUrl != null) {
+                LogoPlate(
+                    url = logoUrl,
+                    fallbackText = fallbackText,
+                    size = 40.dp,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                // The match link has no channel picture: the mark says it plays,
+                // rather than standing in a logo-shaped hole.
+                Text(
+                    text = "▶",
+                    color = Accent,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
         }
         Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = choice.name,
+                text = title,
                 color = Color.White,
                 fontSize = 14.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = choice.category,
+                text = subtitle,
                 color = Muted,
                 fontSize = 12.sp,
                 maxLines = 1,

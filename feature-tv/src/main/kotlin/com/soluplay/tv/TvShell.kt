@@ -52,8 +52,10 @@ import com.soluplay.core.browse.BrowseSnapshot
 import com.soluplay.core.browse.BrowseViewModel
 import com.soluplay.core.browse.CatalogueOrigin
 import com.soluplay.core.favourites.FavouritesViewModel
+import com.soluplay.core.fixtures.FixtureOption
 import com.soluplay.core.fixtures.FixtureTarget
 import com.soluplay.core.fixtures.fixtureTarget
+import com.soluplay.core.fixtures.playableChoices
 import com.soluplay.core.model.Channel
 import com.soluplay.core.model.Fixture
 import com.soluplay.core.player.PlaybackViewModel
@@ -141,6 +143,9 @@ fun TvShell(
 
     var tab by remember { mutableStateOf(TvTab.GUIDE) }
     var watching by remember { mutableStateOf<Channel?>(null) }
+    // The match's own broadcast address, when the card being watched was opened
+    // through it; null means the picture is the channel's own ladder.
+    var matchLink by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<Fixture?>(null) }
     var previewChannel by remember { mutableStateOf<Channel?>(null) }
 
@@ -163,21 +168,61 @@ fun TvShell(
         onRefresh = viewModel::refresh,
     )
 
+    /** Opens a catalogue channel, letting go of any match link that was playing. */
+    fun watch(channel: Channel) {
+        matchLink = null
+        watching = channel
+    }
+
+    /**
+     * Opens the thing the viewer picked on a card.
+     *
+     * A channel is opened by its id, as before. The match link is played on the
+     * card's first openable channel as its identity, so the screen still names
+     * the channel carrying the match; a card whose channels are all gone uses
+     * the match itself as that identity.
+     */
+    fun play(fixture: Fixture, option: FixtureOption) {
+        when (option) {
+            is FixtureOption.Channel -> watch(
+                Channel(
+                    id = option.choice.channelId,
+                    name = option.choice.name,
+                    logo = option.choice.logoUrl,
+                    category = option.choice.category,
+                )
+            )
+
+            is FixtureOption.MatchLink -> {
+                val identity = playableChoices(fixture).firstOrNull()
+                watching = if (identity != null) {
+                    Channel(
+                        id = identity.channelId,
+                        name = identity.name,
+                        logo = identity.logoUrl,
+                        category = identity.category,
+                    )
+                } else {
+                    Channel(
+                        id = "fixture:${fixture.id}",
+                        name = fixture.title.ifBlank { "${fixture.teamA} vs ${fixture.teamB}" },
+                        category = fixture.sport,
+                    )
+                }
+                matchLink = option.url
+            }
+        }
+    }
+
     /**
      * Where a tap on a match card goes.
      *
-     * One channel opens it, several are offered, and a card with nothing
+     * One option opens it, several are offered, and a card with nothing
      * openable is said so instead of opening nothing.
      */
     fun openFixture(fixture: Fixture) {
         when (val target = fixtureTarget(fixture)) {
-            is FixtureTarget.Open -> watching = Channel(
-                id = target.choice.channelId,
-                name = target.choice.name,
-                logo = target.choice.logoUrl,
-                category = target.choice.category,
-            )
-
+            is FixtureTarget.Open -> play(fixture, target.option)
             else -> sheet = fixture
         }
     }
@@ -210,11 +255,15 @@ fun TvShell(
 
         TvWatchScreen(
             channel = onAir,
+            directUrl = matchLink,
             host = host,
             playback = playback,
             marked = onAir.id in marked,
             onToggleFavourite = { favourites.toggle(onAir) },
-            onClose = { watching = null },
+            onClose = {
+                watching = null
+                matchLink = null
+            },
         )
         return
     }
@@ -240,7 +289,7 @@ fun TvShell(
                         snapshot = snapshot,
                         chrome = chrome,
                         marked = marked,
-                        onWatch = { watching = it },
+                        onWatch = { watch(it) },
                         onPickFixture = ::openFixture,
                         onPreview = { previewChannel = it },
                     )
@@ -255,18 +304,20 @@ fun TvShell(
                         channels = snapshot.channels,
                         chrome = chrome,
                         marked = marked,
-                        onOpen = { watching = it },
+                        onOpen = { watch(it) },
                     )
 
                     TvTab.SAVED -> TvFavouritesScreen(
                         snapshot = saved,
                         chrome = chrome,
                         onOpen = { favourite ->
-                            watching = Channel(
-                                id = favourite.channelId,
-                                name = favourite.name,
-                                logo = favourite.logo,
-                                category = favourite.category,
+                            watch(
+                                Channel(
+                                    id = favourite.channelId,
+                                    name = favourite.name,
+                                    logo = favourite.logo,
+                                    category = favourite.category,
+                                )
                             )
                         },
                         onRemove = { favourite ->
@@ -302,14 +353,9 @@ fun TvShell(
             if (open != null) {
                 TvChoiceSheet(
                     fixture = open,
-                    onPick = { choice ->
+                    onPick = { option ->
                         sheet = null
-                        watching = Channel(
-                            id = choice.channelId,
-                            name = choice.name,
-                            logo = choice.logoUrl,
-                            category = choice.category,
-                        )
+                        play(open, option)
                     },
                     onDismiss = { sheet = null },
                 )

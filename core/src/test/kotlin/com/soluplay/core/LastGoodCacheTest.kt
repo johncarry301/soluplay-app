@@ -177,7 +177,7 @@ class LastGoodCacheTest {
     @Test
     fun `the backup address answers the channel when the primary does not`() = runBlocking {
         val transport = FakeTransport(
-            mapOf("https://backup.test/api/channels/a1" to channelDetail),
+            mapOf("https://backup.test/api/app/channels/a1" to channelDetail),
         )
         val client = CatalogueClient(
             baseUrls = listOf("https://primary.test", "https://backup.test"),
@@ -188,7 +188,7 @@ class LastGoodCacheTest {
 
         assertEquals(channelDetail, body)
         assertEquals(
-            listOf("https://primary.test/api/channels/a1", "https://backup.test/api/channels/a1"),
+            listOf("https://primary.test/api/app/channels/a1", "https://backup.test/api/app/channels/a1"),
             transport.requested,
         )
     }

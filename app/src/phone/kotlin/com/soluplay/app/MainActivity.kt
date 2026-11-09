@@ -40,12 +40,14 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * The player is made once and lives as long as the screen does.
+     * The player is made once and lives as long as the app does.
      *
      * The watch screen and the playback rules share it: the surface draws the
-     * picture and the rules decide which mirror is on it.
+     * picture and the rules decide which mirror is on it. It belongs to the
+     * app rather than to this screen, so the picture is still there after the
+     * phone is turned on its side.
      */
-    private val host: Media3PlaybackHost by lazy { Media3PlaybackHost(applicationContext) }
+    private val host: Media3PlaybackHost by lazy { AppGraph.host(applicationContext) }
 
     private val playbackViewModel: PlaybackViewModel by viewModels {
         PlaybackViewModelFactory(
@@ -121,6 +123,30 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updateViewModel.check()
+    }
+
+    /**
+     * The app came to the front.
+     *
+     * A feed that was stopped because the app was put away starts again here,
+     * so a viewer who comes back to the phone finds the channel where it was.
+     */
+    override fun onStart() {
+        super.onStart()
+        playbackViewModel.exitBackground()
+    }
+
+    /**
+     * The app was put away.
+     *
+     * A phone that is locked, or an app that is minimised, must not keep
+     * playing a sound into the background — so the feed is stopped the moment
+     * the screen is no longer on top, and the picture is only held, not
+     * given up.
+     */
+    override fun onStop() {
+        playbackViewModel.enterBackground()
+        super.onStop()
     }
 
     /** The screen where the owner lets this app install its own updates. */

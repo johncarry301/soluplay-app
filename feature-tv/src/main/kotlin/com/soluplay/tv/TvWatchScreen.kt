@@ -71,21 +71,33 @@ fun TvWatchScreen(
     marked: Boolean,
     onToggleFavourite: () -> Unit,
     onClose: () -> Unit,
+    directUrl: String? = null,
 ) {
     val state by playback.state.collectAsStateWithLifecycle()
 
     var held by remember { mutableStateOf(false) }
 
-    LaunchedEffect(channel.id) {
+    // A match link has no catalogue row behind it, so the match's own address
+    // is the ladder; a channel is opened from the catalogue as before.
+    LaunchedEffect(channel.id, directUrl) {
         held = false
-        playback.open(channel.id, channel.name, channel.logo)
+        if (directUrl != null) {
+            playback.openDirect(channel.id, directUrl, channel.name, channel.logo)
+        } else {
+            playback.open(channel.id, channel.name, channel.logo)
+        }
     }
-    DisposableEffect(channel.id) {
+    DisposableEffect(channel.id, directUrl) {
         onDispose { playback.close() }
     }
     BackHandler { onClose() }
 
-    val requesters = remember { List(WATCH_BUTTONS) { FocusRequester() } }
+    // A match link has no catalogue channel behind it, so there is nothing on
+    // the viewer's list to mark; the button is not offered at all.
+    val favouriteable = directUrl == null
+    val requesters = remember(favouriteable) {
+        List(if (favouriteable) WATCH_BUTTONS else WATCH_BUTTONS - 1) { FocusRequester() }
+    }
     val rows = remember(requesters) { listOf(requesters) }
     val focus = remember { TvFocus() }
     val scope = rememberCoroutineScope()
@@ -152,11 +164,13 @@ fun TvWatchScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TvWatchButton(
-                text = if (marked) Copy.savedChannel() else Copy.saveChannel(),
-                requester = requesters.getOrNull(3),
-                onPress = onToggleFavourite,
-            )
+            if (favouriteable) {
+                TvWatchButton(
+                    text = if (marked) Copy.savedChannel() else Copy.saveChannel(),
+                    requester = requesters.getOrNull(3),
+                    onPress = onToggleFavourite,
+                )
+            }
             TvWatchButton(
                 text = if (held) Copy.resumeFeed() else Copy.holdFeed(),
                 requester = requesters.getOrNull(2),

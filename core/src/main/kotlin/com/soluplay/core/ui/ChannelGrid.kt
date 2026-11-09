@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.font.FontWeight
@@ -21,9 +20,12 @@ import com.soluplay.core.model.Channel
 /**
  * One channel on the site's grid.
  *
- * The logo stands on a round white plate — the same plate for every channel,
- * so a grid of them looks like a grid and not a collection of different
- * shapes — with the live dot on its corner and the name under it.
+ * The logo stands on the same white plate every logo stands on — the search
+ * page's plate, so a channel looks the same on every screen — with the live
+ * dot on its corner and the name under it.
+ *
+ * The dot and the star belong to the caller: the guide shows the name and the
+ * picture alone, and the places that mark a channel ask for the star.
  *
  * The channel that is being watched is the one that is lit: its plate takes
  * the site's green edge and its name takes the site's green text.
@@ -36,6 +38,7 @@ fun SiteChannelTile(
     active: Boolean = false,
     marked: Boolean = false,
     onToggleFavourite: (() -> Unit)? = null,
+    showLiveDot: Boolean = true,
 ) {
     Column(
         modifier = modifier.clickable { onPick() },
@@ -46,15 +49,16 @@ fun SiteChannelTile(
             ChannelLogo(
                 channel = channel,
                 size = 56.dp,
-                shape = CircleShape,
                 border = BorderStroke(1.dp, if (active) LiveDot else Slate700),
             )
 
-            SiteLiveDot(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 2.dp, y = (-2).dp),
-            )
+            if (showLiveDot) {
+                SiteLiveDot(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 2.dp, y = (-2).dp),
+                )
+            }
 
             if (onToggleFavourite != null) {
                 FavouriteStar(

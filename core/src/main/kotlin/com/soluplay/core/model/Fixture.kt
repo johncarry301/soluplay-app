@@ -31,6 +31,12 @@ data class Fixture(
     val startsAt: String = "",
     val durationMinutes: Int = 0,
     val phase: String = "",
+    /**
+     * The broadcast address the admin entered for the match itself, or empty.
+     * It is played beside the linked channels, as one more thing the card can
+     * open — the board already checked that it is an HTTPS link.
+     */
+    val directUrl: String = "",
     val choices: List<FixtureChoice> = emptyList(),
     val staleReferences: Int = 0,
     val watchPath: String? = null,

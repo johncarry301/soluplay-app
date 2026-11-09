@@ -13,7 +13,7 @@ object ApiConfig {
     /** Tried in order after the primary fails. */
     val BACKUP_BASE_URLS: List<String> = emptyList()
 
-    const val CHANNELS_PATH = "/api/channels"
+    const val CHANNELS_PATH = "/api/app/channels"
     const val FIXTURES_PATH = "/api/fixtures"
     const val YOUTUBE_RESOLVE_PATH = "/api/youtube/resolve"
 
