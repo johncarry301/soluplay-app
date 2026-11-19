@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "appId": "com.soluplay.app",
-  "versionCode": 3,
-  "versionName": "0.2.1",
-  "updatedAt": "2026-11-06T03:06:58Z",
-  "releaseNotes": "SoluPlay 0.2.1 — the phone now looks like the website, and the matches carry their flags.",
-  "apkUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.1/SoluPlay.apk",
-  "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.1/SoluPlay.apk",
+  "versionCode": 4,
+  "versionName": "0.2.2",
+  "updatedAt": "2026-11-19T15:25:34Z",
+  "releaseNotes": "SoluPlay 0.2.2 — the phone looks and plays like the site, and the TV becomes a real television: open it, and the first channel is on.",
+  "apkUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.2/SoluPlay.apk",
+  "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.2/SoluPlay.apk",
   "fileName": "SoluPlay.apk",
-  "sizeBytes": 2379039,
-  "sha256": "872483c8401bd8c0fe45a8b6e3ad3061adad815d60c508317579d48080a5d3cf",
+  "sizeBytes": 2749850,
+  "sha256": "6fd68a6c24b988d71a30b83bc38fe7a203f564429761d8359f1e6e26a7ca312c",
   "mandatory": false,
   "minSupportedVersionCode": 0,
   "rolloutPercent": 100,
@@ -22,18 +22,18 @@
   "variants": {
     "phone": {
       "label": "Android Phone & Tablet",
-      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.1/SoluPlay.apk",
+      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.2/SoluPlay.apk",
       "fileName": "SoluPlay.apk",
-      "sizeBytes": 2379039,
-      "sha256": "872483c8401bd8c0fe45a8b6e3ad3061adad815d60c508317579d48080a5d3cf",
+      "sizeBytes": 2749850,
+      "sha256": "6fd68a6c24b988d71a30b83bc38fe7a203f564429761d8359f1e6e26a7ca312c",
       "minSdkVersion": 21
     },
     "tv": {
       "label": "Android TV & TV Boxes",
-      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.1/SoluPlay.apk",
+      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.2/SoluPlay.apk",
       "fileName": "SoluPlay.apk",
-      "sizeBytes": 2379039,
-      "sha256": "872483c8401bd8c0fe45a8b6e3ad3061adad815d60c508317579d48080a5d3cf",
+      "sizeBytes": 2749850,
+      "sha256": "6fd68a6c24b988d71a30b83bc38fe7a203f564429761d8359f1e6e26a7ca312c",
       "minSdkVersion": 21
     }
   }
