@@ -3,20 +3,16 @@ package com.soluplay.phone
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
@@ -32,11 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,7 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.soluplay.app.R
 import com.soluplay.app.player.Media3PlaybackHost
 import com.soluplay.core.browse.BrowseViewModel
-import com.soluplay.core.browse.CatalogueOrigin
+import com.soluplay.core.browse.CategoryFilter
 import com.soluplay.core.browse.allChannelsInOrder
 import com.soluplay.core.favourites.FavouritesViewModel
 import com.soluplay.core.fixtures.FixtureOption
@@ -57,16 +51,10 @@ import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.ui.Accent
 import com.soluplay.core.ui.Background
 import com.soluplay.core.ui.Copy
-import com.soluplay.core.ui.HeaderBackground
 import com.soluplay.core.ui.Muted
 import com.soluplay.core.ui.OutageBanner
 import com.soluplay.core.ui.Panel
-import com.soluplay.core.ui.PanelMid
-import com.soluplay.core.ui.Slate400
 import com.soluplay.core.ui.Slate800
-import com.soluplay.core.ui.SourceBadge
-import com.soluplay.core.ui.UiLanguage
-import com.soluplay.core.ui.UiLanguageStore
 import com.soluplay.core.ui.outageMessage
 
 /** The four places the phone can be. */
@@ -75,9 +63,10 @@ private enum class PhoneTab { HOME, MATCHES, SEARCH, SAVED }
 /**
  * The handset app.
  *
- * Four places sit under one top bar: the guide, the match board, the search
- * and the viewer's own list. A channel opens the watch screen, which takes the
- * whole screen — the picture is the screen, and the words sit over it.
+ * Four places sit under one bottom bar, the app's own mark standing first
+ * among them: the guide, the match board, the search and the viewer's own
+ * list. A channel opens the watch screen, which takes the whole screen — the
+ * picture is the screen, and the words sit over it.
  *
  * The guide is the server's and is never re-ranked here. The list of
  * favourites is the viewer's own and lives on the device.
@@ -88,11 +77,9 @@ fun PhoneShell(
     playback: PlaybackViewModel,
     host: Media3PlaybackHost,
     favourites: FavouritesViewModel,
-    language: UiLanguageStore,
 ) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val saved by favourites.snapshot.collectAsStateWithLifecycle()
-    val spoken by language.language.collectAsStateWithLifecycle()
 
     var tab by remember { mutableStateOf(PhoneTab.HOME) }
     var watching by remember { mutableStateOf<Channel?>(null) }
@@ -100,6 +87,10 @@ fun PhoneShell(
     // through it; null means the picture is the channel's own ladder.
     var matchLink by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf<Fixture?>(null) }
+
+    // The pill the home grid is on. The watch screen is opened on the same
+    // pill, the way the site carries its category into the watch page.
+    var homeFilter by remember { mutableStateOf<CategoryFilter?>(null) }
 
     val marked = remember(saved.items) { saved.items.map { it.channelId }.toSet() }
     val channels = remember(snapshot.channels) { allChannelsInOrder(snapshot.channels) }
@@ -171,13 +162,15 @@ fun PhoneShell(
             directUrl = matchLink,
             host = host,
             playback = playback,
-            marked = onAir.id in marked,
-            onToggleFavourite = { favourites.toggle(onAir) },
             onOpenChannel = { watch(it) },
             onClose = {
                 watching = null
                 matchLink = null
             },
+            marked = marked.contains(onAir.id),
+            onToggleFavourite = { favourites.toggle(onAir) },
+            initialFilter = homeFilter,
+            loading = snapshot.loading,
         )
         return
     }
@@ -188,14 +181,6 @@ fun PhoneShell(
     Surface(color = Background, modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
-                PhoneTopBar(
-                    origin = snapshot.origin,
-                    loading = snapshot.loading,
-                    language = spoken,
-                    onRefresh = viewModel::refresh,
-                    onToggleLanguage = language::toggle,
-                )
-
                 if (snapshot.outage) {
                     OutageBanner(
                         message = outageMessage(snapshot),
@@ -213,6 +198,9 @@ fun PhoneShell(
                             snapshot = snapshot,
                             onOpen = { watch(it) },
                             onPickFixture = ::openFixture,
+                            filter = homeFilter,
+                            onFilter = { homeFilter = it },
+                            onRefresh = viewModel::refresh,
                         )
 
                         PhoneTab.MATCHES -> PhoneBoardScreen(
@@ -269,90 +257,8 @@ fun PhoneShell(
 }
 
 /**
- * The bar at the top: who the app is, which copy of the guide is on the
- * screen, and the two things the viewer can ask for.
- *
- * It is the site's own bar: the same dark band, the same hairline under it,
- * and the same small pills on the right.
- */
-@Composable
-private fun PhoneTopBar(
-    origin: CatalogueOrigin,
-    loading: Boolean,
-    language: UiLanguage,
-    onRefresh: () -> Unit,
-    onToggleLanguage: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(HeaderBackground),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.soluplay_logo),
-                contentDescription = "SoluPlay",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.height(28.dp),
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            SourceBadge(origin = origin, fontSize = 11.sp)
-            Spacer(modifier = Modifier.weight(1f))
-            ChromePill(
-                text = if (language == UiLanguage.BENGALI) {
-                    Copy.englishToggle()
-                } else {
-                    Copy.bengaliToggle()
-                },
-                onClick = onToggleLanguage,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            ChromePill(
-                text = if (loading) Copy.refreshing() else Copy.refresh(),
-                enabled = !loading,
-                onClick = onRefresh,
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(Slate800.copy(alpha = 0.8f)),
-        )
-    }
-}
-
-/** One of the small pills in the top bar. */
-@Composable
-private fun ChromePill(
-    text: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-) {
-    val shape = RoundedCornerShape(8.dp)
-    Text(
-        text = text,
-        color = Slate400,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        modifier = Modifier
-            .clip(shape)
-            .background(PanelMid)
-            .border(1.dp, Slate800, shape)
-            .clickable(enabled = enabled) { onClick() }
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    )
-}
-
-/**
- * The four places, along the bottom.
+ * The four places, along the bottom, with the app's own mark standing first
+ * among them.
  *
  * The bar is always there, so the viewer is never lost: the place they are in
  * is the one that is lit.
@@ -374,13 +280,26 @@ private fun PhoneBottomBar(tab: PhoneTab, onPick: (PhoneTab) -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BottomItem(PhoneTab.HOME, Icons.Filled.Home, Copy.home(), tab, onPick)
-            BottomItem(PhoneTab.MATCHES, Icons.Filled.PlayArrow, Copy.matchesTab(), tab, onPick)
-            BottomItem(PhoneTab.SEARCH, Icons.Filled.Search, Copy.searchTab(), tab, onPick)
-            BottomItem(PhoneTab.SAVED, Icons.Filled.Star, Copy.savedTab(), tab, onPick)
+            Image(
+                painter = painterResource(R.drawable.soluplay_logo),
+                contentDescription = "SoluPlay",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .height(22.dp),
+            )
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BottomItem(PhoneTab.HOME, Icons.Filled.Home, Copy.home(), tab, onPick)
+                BottomItem(PhoneTab.MATCHES, Icons.Filled.PlayArrow, Copy.matchesTab(), tab, onPick)
+                BottomItem(PhoneTab.SEARCH, Icons.Filled.Search, Copy.searchTab(), tab, onPick)
+                BottomItem(PhoneTab.SAVED, Icons.Filled.Star, Copy.savedTab(), tab, onPick)
+            }
         }
     }
 }

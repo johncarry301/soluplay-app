@@ -95,7 +95,6 @@ class MainActivity : ComponentActivity() {
                                     playback = playbackViewModel,
                                     host = host,
                                     favourites = favouritesViewModel,
-                                    language = languageStore,
                                 )
                             }
                         }

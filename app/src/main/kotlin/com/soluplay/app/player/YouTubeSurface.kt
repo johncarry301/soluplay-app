@@ -80,6 +80,10 @@ class YouTubeSurface(
     /** The video that is to be played, and is waiting for the page. */
     private var wanted: String? = null
 
+    /** How loud the picture is, kept for the player the page makes next. */
+    private var volumePercent = 100
+    private var muted = false
+
     init {
         view.setBackgroundColor(Color.BLACK)
         view.layoutParams = ViewGroup.LayoutParams(
@@ -103,6 +107,7 @@ class YouTubeSurface(
         view.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 pageLoaded = true
+                applyAudio()
                 wanted?.let { videoId -> start(videoId) }
             }
 
@@ -155,6 +160,31 @@ class YouTubeSurface(
     /** Tells the page which video to play. */
     private fun start(videoId: String) {
         view.evaluateJavascript("start(${videoId.asJavaScriptString()});", null)
+        applyAudio()
+    }
+
+    /** Sets how loud the picture is, as the percentage YouTube asks for. */
+    fun setVolume(percent: Int) {
+        volumePercent = percent.coerceIn(0, 100)
+        applyAudio()
+    }
+
+    /** Silences the picture, or lets it sound again. */
+    fun setMuted(value: Boolean) {
+        muted = value
+        applyAudio()
+    }
+
+    /**
+     * Tells the page the level and the silence.
+     *
+     * A player the page makes starts at full volume of its own accord, so the
+     * level is put back after every video — and a request made before the page
+     * has arrived would be dropped, so it waits for the page.
+     */
+    private fun applyAudio() {
+        if (!pageLoaded) return
+        view.evaluateJavascript("volume($volumePercent); mute($muted);", null)
     }
 
     /**

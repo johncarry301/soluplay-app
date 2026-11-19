@@ -1,4 +1,4 @@
-package com.soluplay.phone
+package com.soluplay.core.ui
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -17,9 +17,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
-import com.soluplay.core.ui.Accent
-import com.soluplay.core.ui.LiveDot
-import com.soluplay.core.ui.Slate800
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -35,8 +32,9 @@ import kotlin.math.sin
  * to be is drawn instead: an outline whose colour travels around the edge of
  * the frame.
  *
- * The frame is the shape of the picture and no bigger: it sits around the
- * area the video will take, and never around the whole screen.
+ * The frame is the player's own frame, exactly: its whole bounds and its
+ * square corners, never a rounded shape inside it and never a letterbox of
+ * its own — the line runs where the picture's edge runs.
  */
 @Composable
 fun PlayerLoadingFrame(modifier: Modifier = Modifier) {
@@ -52,16 +50,15 @@ fun PlayerLoadingFrame(modifier: Modifier = Modifier) {
 
     Canvas(modifier = modifier) {
         val stroke = 3.dp.toPx()
-        val corner = 12.dp.toPx()
 
-        // The frame of the picture: as wide as the screen allows and in the
-        // proportions a channel is published in.
-        val frameWidth = min(size.width, size.height * 16f / 9f)
-        val frameHeight = frameWidth * 9f / 16f
-        val left = (size.width - frameWidth) / 2f
-        val top = (size.height - frameHeight) / 2f
+        // The player's exact bounds, with its square corners. The line is
+        // inset by half its own width so it is drawn whole inside the frame.
+        val left = stroke / 2f
+        val top = stroke / 2f
+        val frameWidth = size.width - stroke
+        val frameHeight = size.height - stroke
 
-        val points = perimeter(left, top, frameWidth, frameHeight, corner, EDGE_POINTS)
+        val points = perimeter(left, top, frameWidth, frameHeight, 0f, EDGE_POINTS)
 
         // The frame itself, quietly there, so the place of the picture is
         // known even when the colour is elsewhere.
@@ -128,7 +125,7 @@ private fun perimeter(
         Piece(r * PI.toFloat() / 2f) { t ->
             arcPoint(left + r, top + r, r, 180f + t * 90f)
         },
-    )
+    ).filter { it.length > 0f }
 
     val total = pieces.sumOf { it.length.toDouble() }.toFloat()
     val points = ArrayList<Offset>(count)
@@ -164,7 +161,7 @@ private fun ramp(t: Float): Color {
 private const val BAND = 0.32f
 
 /** How many points the frame is drawn with. */
-private const val EDGE_POINTS = 96
+private const val EDGE_POINTS = 240
 
 /** The colours the band is made of. */
 private val BAND_COLOURS = listOf(

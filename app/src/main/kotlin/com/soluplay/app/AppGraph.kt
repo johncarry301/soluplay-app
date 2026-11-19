@@ -97,6 +97,7 @@ object AppGraph {
      */
     fun prepare(context: Context) {
         LogoLoader.useDiskCache(File(context.cacheDir, LOGO_CACHE_DIRECTORY))
+        LogoLoader.useApplicationContext(context)
         socketFactory = TlsSetup.install(context)
     }
 

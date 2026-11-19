@@ -2,7 +2,7 @@ package com.soluplay.app.player
 
 import android.content.Context
 import android.graphics.Color
-import android.view.Gravity
+import android.graphics.Matrix
 import android.view.TextureView
 import android.widget.FrameLayout
 import androidx.media3.common.VideoSize
@@ -18,10 +18,11 @@ import androidx.media3.common.VideoSize
  * seen. A texture is an ordinary view, so the ordinary rule applies: the view
  * that is brought to the front is the one on the screen.
  *
- * The frame is letterboxed the way the web player letterboxes it: the picture
- * keeps its own proportions and is fitted inside the frame, never cropped —
- * unless the picture is asked to cover the frame, which is what the full
- * screen does.
+ * The texture always fills the frame, and the letterbox is a transform on the
+ * picture itself rather than a size on the view: a view kept at a fixed pixel
+ * size can stay at the size of the old frame after the frame changes shape —
+ * the whole screen, or the phone turned on its side — while a texture that
+ * fills the frame follows every change of it at once.
  */
 class VideoSurface(context: Context) : FrameLayout(context) {
 
@@ -56,6 +57,11 @@ class VideoSurface(context: Context) : FrameLayout(context) {
         fit()
     }
 
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        if (changed) fit()
+    }
+
     /** Fits the picture inside the frame, keeping its proportions. */
     private fun fit() {
         if (videoWidth <= 0 || videoHeight <= 0) return
@@ -66,15 +72,13 @@ class VideoSurface(context: Context) : FrameLayout(context) {
         // does not match the channel's, the difference is left as a bar
         // rather than cut off the picture.
         val scale = minOf(width.toFloat() / videoWidth, height.toFloat() / videoHeight)
-        val fittedWidth = (videoWidth * scale).toInt().coerceAtLeast(1)
-        val fittedHeight = (videoHeight * scale).toInt().coerceAtLeast(1)
+        val fittedWidth = videoWidth * scale
+        val fittedHeight = videoHeight * scale
 
-        val params = texture.layoutParams as LayoutParams
-        if (params.width == fittedWidth && params.height == fittedHeight) return
-
-        params.width = fittedWidth
-        params.height = fittedHeight
-        params.gravity = Gravity.CENTER
-        texture.layoutParams = params
+        val transform = Matrix()
+        transform.setScale(fittedWidth / width, fittedHeight / height)
+        transform.postTranslate((width - fittedWidth) / 2f, (height - fittedHeight) / 2f)
+        texture.setTransform(transform)
+        texture.invalidate()
     }
 }

@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,6 +41,7 @@ fun SiteChannelTile(
     marked: Boolean = false,
     onToggleFavourite: (() -> Unit)? = null,
     showLiveDot: Boolean = true,
+    shape: Shape = RoundedCornerShape(percent = 24),
 ) {
     Column(
         modifier = modifier.clickable { onPick() },
@@ -50,6 +53,7 @@ fun SiteChannelTile(
                 channel = channel,
                 size = 56.dp,
                 border = BorderStroke(1.dp, if (active) LiveDot else Slate700),
+                shape = shape,
             )
 
             if (showLiveDot) {

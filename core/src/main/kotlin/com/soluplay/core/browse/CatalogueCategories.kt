@@ -14,17 +14,19 @@ data class CategoryFilter(
     val name: String,
     /** The exact `Channel.category` value this filter lists. */
     val category: String,
+    /** The rail's heading on the site's watch page, e.g. "Sports TV". */
+    val title: String = name,
 )
 
 /** The seven, and only seven, the catalogue holds. */
 val CATEGORY_FILTERS: List<CategoryFilter> = listOf(
-    CategoryFilter("sports", "Sports", "Sports"),
-    CategoryFilter("bangla", "Bangla", "Bangla"),
-    CategoryFilter("indian", "Indian", "Indian"),
-    CategoryFilter("pakistani", "Pakistani", "Pakistani"),
-    CategoryFilter("documentary", "Documentary", "Documentary"),
-    CategoryFilter("kids", "Kids", "Kids"),
-    CategoryFilter("global", "Global", "Global"),
+    CategoryFilter("sports", "Sports", "Sports", "Sports TV"),
+    CategoryFilter("bangla", "Bangla", "Bangla", "Bangla TV"),
+    CategoryFilter("indian", "Indian", "Indian", "Indian TV"),
+    CategoryFilter("pakistani", "Pakistani", "Pakistani", "Pakistani TV"),
+    CategoryFilter("documentary", "Documentary", "Documentary", "Documentary TV"),
+    CategoryFilter("kids", "Kids", "Kids", "Kids TV"),
+    CategoryFilter("global", "Global", "Global", "Global TV"),
 )
 
 /**

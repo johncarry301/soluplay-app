@@ -4,9 +4,12 @@ import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -25,6 +28,9 @@ import com.soluplay.core.tls.ProviderTls
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -61,6 +67,108 @@ class Media3PlaybackHost(
     private val resolver: YouTubeResolver = YouTubeResolver(poster = UrlConnectionTransport()),
 ) : PlaybackHost {
 
+    /** How loud the picture is, and whether it has been silenced. */
+    data class PlayerAudio(val volume: Float = 1f, val muted: Boolean = false)
+
+    /** What sizes the stream offers, and which one is on the screen. */
+    data class PlayerQuality(
+        val heights: List<Int> = emptyList(),
+        val currentHeight: Int = 0,
+        val override: Int? = null,
+    )
+
+    private val _audio = MutableStateFlow(PlayerAudio())
+    val audio: StateFlow<PlayerAudio> = _audio.asStateFlow()
+
+    private val _quality = MutableStateFlow(PlayerQuality())
+    val quality: StateFlow<PlayerQuality> = _quality.asStateFlow()
+
+    /** The try at playing whose picture is on the screen. */
+    private var selectedAttempt: Long? = null
+
+    /** Sets how loud the picture is, on every player that is in flight. */
+    fun setVolume(volume: Float) {
+        val clamped = volume.coerceIn(0f, 1f)
+        _audio.value = PlayerAudio(clamped, muted = clamped <= 0f)
+        applyAudio()
+    }
+
+    /** Silences the picture, or lets it sound again, without losing the level. */
+    fun setMuted(muted: Boolean) {
+        _audio.value = _audio.value.copy(muted = muted)
+        applyAudio()
+    }
+
+    /**
+     * Picks the size of the picture: null lets the player choose, a height
+     * pins it to that size.
+     */
+    fun selectQuality(height: Int?) {
+        _quality.value = _quality.value.copy(override = height)
+        racers.values.forEach { racer ->
+            if (racer is MediaRacer) applyQuality(racer.player)
+        }
+        publishQuality()
+    }
+
+    private fun applyAudio() {
+        val state = _audio.value
+        racers.values.forEach { racer ->
+            // Only the mirror that won the race may sound. The mirrors still
+            // being tried play silently, so two mirrors of one channel are
+            // never heard together as an echo.
+            val audible = racer.attempt == selectedAttempt
+            when (racer) {
+                is MediaRacer -> racer.player.volume =
+                    if (!audible || state.muted) 0f else state.volume
+                is YouTubeRacer -> {
+                    racer.surface.setVolume(if (audible) (state.volume * 100).toInt() else 0)
+                    racer.surface.setMuted(!audible || state.muted)
+                }
+            }
+        }
+    }
+
+    private fun applyQuality(player: ExoPlayer) {
+        val wanted = _quality.value.override
+        val builder = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+            .clearVideoSizeConstraints()
+        if (wanted != null) {
+            val group = player.currentTracks.groups.firstOrNull { group ->
+                group.type == C.TRACK_TYPE_VIDEO && group.isSupported &&
+                    (0 until group.length).any { group.getTrackFormat(it).height == wanted }
+            }
+            if (group != null) {
+                val index = (0 until group.length).first { group.getTrackFormat(it).height == wanted }
+                builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+            }
+        }
+        player.trackSelectionParameters = builder.build()
+    }
+
+    /** Tells the screen what sizes the stream offers and which one is shown. */
+    private fun publishQuality() {
+        val racer = selectedAttempt?.let { racers[it] } as? MediaRacer
+        if (racer == null) {
+            if (_quality.value.heights.isNotEmpty() || _quality.value.currentHeight != 0) {
+                _quality.value = _quality.value.copy(heights = emptyList(), currentHeight = 0)
+            }
+            return
+        }
+        val heights = racer.player.currentTracks.groups
+            .filter { it.type == C.TRACK_TYPE_VIDEO && it.isSupported }
+            .flatMap { group -> (0 until group.length).map { group.getTrackFormat(it).height } }
+            .filter { it > 0 }
+            .distinct()
+            .sortedDescending()
+        val current = racer.player.videoFormat?.height ?: 0
+        val state = _quality.value
+        if (state.heights != heights || state.currentHeight != current) {
+            _quality.value = state.copy(heights = heights, currentHeight = current)
+        }
+    }
+
     /** One mirror in the race, with the player that is trying it. */
     private abstract class Racer(val attempt: Long) {
 
@@ -87,6 +195,9 @@ class Media3PlaybackHost(
         init {
             player.addListener(observer)
             player.setVideoTextureView(surface.textureView)
+            // A mirror still being tried is silent; only the winner sounds.
+            player.volume = 0f
+            applyQuality(player)
             view = surface
         }
 
@@ -116,6 +227,8 @@ class Media3PlaybackHost(
         val surface = YouTubeSurface(context, onEvent = { event -> onYouTubeEvent(attempt, event) })
 
         init {
+            surface.setVolume(0)
+            surface.setMuted(true)
             view = surface.view
         }
 
@@ -185,6 +298,10 @@ class Media3PlaybackHost(
 
     override fun cancel(attempt: Long) {
         val racer = racers.remove(attempt) ?: return
+        if (selectedAttempt == attempt) {
+            selectedAttempt = null
+            publishQuality()
+        }
 
         // The listener that was put on is the one that comes off, and nothing
         // this player says afterwards can reach the machine.
@@ -202,10 +319,15 @@ class Media3PlaybackHost(
             stage?.bringChildToFront(view)
             view.alpha = 1f
         }
+        selectedAttempt = attempt
+        applyAudio()
+        publishQuality()
     }
 
     override fun stop() {
         racers.keys.toList().forEach { cancel(it) }
+        selectedAttempt = null
+        publishQuality()
     }
 
     /**
@@ -408,6 +530,18 @@ class Media3PlaybackHost(
         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
             val racer = racers[attempt] as? MediaRacer ?: return
             (racer.view as? VideoSurface)?.onVideoSize(videoSize)
+            publishQuality()
+        }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            val racer = racers[attempt] as? MediaRacer ?: return
+            // A new playlist can arrive without the size the viewer pinned,
+            // so the pin is put back only when the picture is not it already.
+            val wanted = _quality.value.override
+            if (wanted != null && racer.player.videoFormat?.height != wanted) {
+                applyQuality(racer.player)
+            }
+            publishQuality()
         }
 
         override fun onPlayerError(error: PlaybackException) {

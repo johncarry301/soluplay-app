@@ -1,15 +1,29 @@
 package com.soluplay.core.ui
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import com.soluplay.core.api.ApiConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -50,6 +64,8 @@ object LogoLoader {
 
     private var diskDirectory: File? = null
 
+    private var appContext: Context? = null
+
     /**
      * Where the copies of the logos are kept between runs.
      *
@@ -58,6 +74,11 @@ object LogoLoader {
      */
     fun useDiskCache(directory: File) {
         diskDirectory = directory
+    }
+
+    /** The application, for the one logo kind only the web engine can draw. */
+    fun useApplicationContext(context: Context) {
+        appContext = context.applicationContext
     }
 
     suspend fun load(url: String): ImageBitmap? {
@@ -115,30 +136,160 @@ object LogoLoader {
 
     /** Fetches the logo and keeps a copy of it on the device. */
     private suspend fun fetch(url: String): ImageBitmap? = withContext(Dispatchers.IO) {
-        val bytes = gate.withPermit {
-            runCatching {
-                val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 8_000
-                    readTimeout = 10_000
-                    instanceFollowRedirects = true
-                    setRequestProperty("Accept", "image/*")
-                    // Some of the logo hosts refuse a request that does not
-                    // say who is asking — Wikimedia answers 403 to a client
-                    // that names no one. A browser's name is what they expect.
-                    setRequestProperty("User-Agent", LOGO_USER_AGENT)
-                }
-                try {
-                    if (connection.responseCode !in 200..299) return@runCatching null
-                    connection.inputStream.use { it.readBytes() }
-                } finally {
-                    connection.disconnect()
-                }
-            }.getOrNull()
-        } ?: return@withContext null
+        val (bytes, type) = fetchBytes(url) ?: return@withContext null
+
+        if (isSvg(bytes, type)) {
+            // A vector logo is one the picture decoder cannot read, so the
+            // web engine draws it once and the drawing is what is kept.
+            val image = rasterizeSvg(url) ?: return@withContext null
+            writeToDisk(url, pngBytes(image))
+            return@withContext remember(url, image)
+        }
 
         writeToDisk(url, bytes)
         val image = decode(bytes) ?: return@withContext null
         remember(url, image)
+    }
+
+    /**
+     * Asks for the picture, following every redirect and waiting out a host
+     * that is counting requests.
+     *
+     * A redirect that changes protocol is followed by hand, because the
+     * connection's own following stops at the protocol door. A host that
+     * answers "too many" is asked again after a wait that doubles, the way a
+     * browser's own retry behaves; a host that refuses outright is not asked
+     * twice.
+     */
+    private suspend fun fetchBytes(url: String): Pair<ByteArray, String>? {
+        var current = url
+        var waitMs = 2_000L
+        for (step in 0 until 8) {
+            val answer = gate.withPermit {
+                runCatching {
+                    val connection = (URL(current).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 8_000
+                        readTimeout = 10_000
+                        instanceFollowRedirects = false
+                        setRequestProperty("Accept", "image/*")
+                        // Some of the logo hosts refuse a request that does not
+                        // say who is asking — Wikimedia answers 403 to a client
+                        // that names no one. A browser's name is what they expect.
+                        setRequestProperty("User-Agent", LOGO_USER_AGENT)
+                        // And some serve only the pages the logo stands on: a
+                        // request naming the site is served, one naming nothing
+                        // is turned away with 403.
+                        setRequestProperty("Referer", ApiConfig.PRIMARY_BASE_URL + "/")
+                    }
+                    try {
+                        val code = connection.responseCode
+                        val type = connection.contentType ?: ""
+                        val location = connection.getHeaderField("Location")
+                        val bytes = if (code in 200..299) {
+                            connection.inputStream.use { it.readBytes() }
+                        } else {
+                            null
+                        }
+                        Answer(code, type, location, bytes)
+                    } finally {
+                        connection.disconnect()
+                    }
+                }.getOrNull()
+            } ?: return null
+
+            when {
+                answer.code in 200..299 && answer.bytes != null ->
+                    return answer.bytes to answer.type
+                answer.code in 300..399 && answer.location != null ->
+                    current = URL(URL(current), answer.location).toString()
+                answer.code == 429 || answer.code == 503 -> {
+                    delay(waitMs)
+                    waitMs *= 2
+                }
+                else -> return null
+            }
+        }
+        return null
+    }
+
+    /** One answer from a logo host, before it is judged. */
+    private class Answer(
+        val code: Int,
+        val type: String,
+        val location: String?,
+        val bytes: ByteArray?,
+    )
+
+    /** Whether the picture is a vector one, by its type or by its own head. */
+    private fun isSvg(bytes: ByteArray, type: String): Boolean {
+        if (type.contains("svg", ignoreCase = true)) return true
+        val head = String(bytes, 0, minOf(bytes.size, 512), Charsets.UTF_8)
+        return head.contains("<svg", ignoreCase = true)
+    }
+
+    /**
+     * Draws a vector logo with the web engine, off the screen.
+     *
+     * The engine is given a page of exactly the size a kept logo may be, with
+     * the logo fitted inside it, and what it draws is taken as the picture.
+     * The page says when the logo has arrived by naming itself; until then,
+     * or until the wait runs out, nothing is taken.
+     */
+    private suspend fun rasterizeSvg(url: String): ImageBitmap? {
+        val context = appContext ?: return null
+        return withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine { continuation ->
+                val web = WebView(context)
+                val handler = Handler(Looper.getMainLooper())
+                var finished = false
+                val finish: (ImageBitmap?) -> Unit = { result ->
+                    if (!finished) {
+                        finished = true
+                        handler.removeCallbacksAndMessages(null)
+                        web.destroy()
+                        if (continuation.isActive) {
+                            continuation.resumeWith(Result.success(result))
+                        }
+                    }
+                }
+                continuation.invokeOnCancellation { handler.post { finish(null) } }
+
+                web.setBackgroundColor(Color.TRANSPARENT)
+                web.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                web.settings.javaScriptEnabled = true
+                web.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                web.settings.loadWithOverviewMode = true
+                web.settings.useWideViewPort = true
+                web.webChromeClient = object : WebChromeClient() {
+                    override fun onReceivedTitle(view: WebView, title: String?) {
+                        if (title != READY_TITLE) return
+                        val edge = MAX_EDGE_PX
+                        val exact = View.MeasureSpec.makeMeasureSpec(edge, View.MeasureSpec.EXACTLY)
+                        web.measure(exact, exact)
+                        web.layout(0, 0, edge, edge)
+                        val bitmap = Bitmap.createBitmap(edge, edge, Bitmap.Config.ARGB_8888)
+                        web.draw(Canvas(bitmap))
+                        finish(bitmap.asImageBitmap())
+                    }
+                }
+
+                val html = "<html><head>" +
+                    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
+                    "<style>html,body{margin:0;padding:0;width:100%;height:100%;background:transparent}" +
+                    "img{width:100%;height:100%;object-fit:contain}</style></head>" +
+                    "<body><img src=\"" + url + "\" onload=\"document.title='" + READY_TITLE + "'\">" +
+                    "</body></html>"
+                web.loadDataWithBaseURL(url, html, "text/html", "utf-8", null)
+                handler.postDelayed({ finish(null) }, SVG_TIMEOUT_MS)
+            }
+        }
+    }
+
+    /** The drawing of a vector logo, kept as a picture every decoder reads. */
+    private fun pngBytes(image: ImageBitmap): ByteArray {
+        val stream = ByteArrayOutputStream()
+        image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, stream)
+        return stream.toByteArray()
     }
 
     /**
@@ -198,6 +349,12 @@ object LogoLoader {
     }
 
     private const val BYTES_PER_PIXEL = 4L
+
+    /** The name the vector page gives itself when its logo has arrived. */
+    private const val READY_TITLE = "soluplay-logo-ready"
+
+    /** How long the web engine is given to draw one vector logo. */
+    private const val SVG_TIMEOUT_MS = 10_000L
 
     /**
      * The name the logos are asked with.

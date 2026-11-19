@@ -102,4 +102,18 @@ fun allChannelsInOrder(channels: List<Channel>): List<Channel> =
             .thenBy { it.name },
     )
 
+/**
+ * The catalogue in the order the site's watch page lists it.
+ *
+ * The watch sidebar keeps the pinned channels first, in the board order an
+ * admin gave them, and puts every other channel in name order — which is not
+ * the home grid's order, and is the site's own rule for that list.
+ */
+fun sidebarChannelsInOrder(channels: List<Channel>): List<Channel> =
+    channels.sortedWith(
+        compareByDescending<Channel> { it.isPinned }
+            .thenBy { if (it.isPinned) it.priorityOrder else Int.MAX_VALUE }
+            .thenBy { it.name.lowercase() },
+    )
+
 private const val OTHER_CATEGORY = "Other"

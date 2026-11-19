@@ -36,11 +36,16 @@ fun Modifier.watchGestures(onIntent: (GestureIntent) -> Unit): Modifier =
             var dragX = 0f
             var dragY = 0f
             var pointers = 1
+            var stolen = false
 
             do {
                 val event = awaitPointerEvent()
                 val pressed = event.changes.filter { it.pressed }
                 if (pressed.isNotEmpty()) {
+                    // A control over the picture — a button, the volume
+                    // slider — takes the touch for itself. A movement that
+                    // belongs to a control is not a swipe on the picture.
+                    if (pressed.any { it.isConsumed }) stolen = true
                     pointers = max(pointers, pressed.size)
                     val change = pressed.first()
                     dragX = change.position.x - start.x
@@ -54,6 +59,7 @@ fun Modifier.watchGestures(onIntent: (GestureIntent) -> Unit): Modifier =
 
             val travelled = max(abs(dragXDp), abs(dragYDp))
             val tapCount = when {
+                stolen -> 0
                 travelled >= Gestures.SWIPE_THRESHOLD_DP -> 0
                 else -> {
                     val moment = down.uptimeMillis
@@ -63,7 +69,7 @@ fun Modifier.watchGestures(onIntent: (GestureIntent) -> Unit): Modifier =
                 }
             }
 
-            val intent = Gestures.intentOf(
+            val intent = if (stolen) null else Gestures.intentOf(
                 GestureEvent(
                     tapCount = tapCount,
                     pointerCount = pointers,

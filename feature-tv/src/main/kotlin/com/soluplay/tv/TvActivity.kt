@@ -7,6 +7,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import com.soluplay.core.favourites.FavouritesViewModel
 import com.soluplay.core.player.PlaybackViewModel
 import com.soluplay.core.player.PlaybackViewModelFactory
 import com.soluplay.core.ui.Background
+import com.soluplay.core.ui.LocalUiLanguage
 import com.soluplay.core.ui.UpdateBlockPanel
 import com.soluplay.core.ui.UpdateSheet
 import com.soluplay.core.ui.UiLanguageStore
@@ -31,6 +33,9 @@ import com.soluplay.core.update.UpdateState
 /**
  * The TV entry. It ships inside the same APK as the phone app, so a box that
  * installs one file gets both launchers.
+ *
+ * There is one screen and one player: the picture is the whole screen from
+ * the first moment, and the remote is the whole interface.
  */
 class TvActivity : ComponentActivity() {
 
@@ -45,22 +50,6 @@ class TvActivity : ComponentActivity() {
         PlaybackViewModelFactory(
             repository = AppGraph.repository(applicationContext),
             host = host,
-        )
-    }
-
-    /**
-     * The player of the corner preview.
-     *
-     * The preview plays while the guide is being browsed, and the watch
-     * screen plays on its own — so the two need a player each, and neither
-     * of them takes the decoder from the other.
-     */
-    private val previewHost: Media3PlaybackHost by lazy { Media3PlaybackHost(applicationContext) }
-
-    private val previewPlaybackViewModel: PlaybackViewModel by viewModels {
-        PlaybackViewModelFactory(
-            repository = AppGraph.repository(applicationContext),
-            host = previewHost,
         )
     }
 
@@ -83,41 +72,41 @@ class TvActivity : ComponentActivity() {
         setContent {
             SoluPlayTheme {
                 val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+                val spoken by languageStore.language.collectAsStateWithLifecycle()
 
-                Surface(color = Background, modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        val blocked = updateState as? UpdateState.Blocked
-                        if (blocked != null) {
-                            // A build that may not play is not shown the
-                            // guide: there is nothing on it that works.
-                            UpdateBlockPanel(
-                                state = blocked,
+                CompositionLocalProvider(LocalUiLanguage provides spoken) {
+                    Surface(color = Background, modifier = Modifier.fillMaxSize()) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            val blocked = updateState as? UpdateState.Blocked
+                            if (blocked != null) {
+                                // A build that may not play is not shown the
+                                // picture: there is nothing on it that works.
+                                UpdateBlockPanel(
+                                    state = blocked,
+                                    scale = 1.7f,
+                                    onInstall = { updateViewModel.install() },
+                                    onAllowInstall = { allowInstall() },
+                                )
+                            } else {
+                                TvScreen(
+                                    viewModel = browseViewModel,
+                                    playback = playbackViewModel,
+                                    host = host,
+                                    favourites = favouritesViewModel,
+                                )
+                            }
+
+                            UpdateSheet(
+                                state = updateState,
+                                alignment = Alignment.Center,
                                 scale = 1.7f,
+                                panelWidth = 620.dp,
                                 onInstall = { updateViewModel.install() },
                                 onAllowInstall = { allowInstall() },
-                            )
-                        } else {
-                            TvShell(
-                                viewModel = browseViewModel,
-                                playback = playbackViewModel,
-                                host = host,
-                                previewHost = previewHost,
-                                previewPlayback = previewPlaybackViewModel,
-                                favourites = favouritesViewModel,
-                                language = languageStore,
+                                onLater = { updateViewModel.dismiss() },
+                                onRetry = { updateViewModel.check(force = true) },
                             )
                         }
-
-                        UpdateSheet(
-                            state = updateState,
-                            alignment = Alignment.Center,
-                            scale = 1.7f,
-                            panelWidth = 620.dp,
-                            onInstall = { updateViewModel.install() },
-                            onAllowInstall = { allowInstall() },
-                            onLater = { updateViewModel.dismiss() },
-                            onRetry = { updateViewModel.check(force = true) },
-                        )
                     }
                 }
             }

@@ -68,6 +68,16 @@ object Copy {
         "Tuning mirror $mirror of $of…",
     )
 
+    @Composable fun mirrorInfo(mirror: Int, of: Int) = text(
+        "মিরর $mirror / $of",
+        "Mirror $mirror / $of",
+    )
+
+    @Composable fun tvSidebarHint() = text(
+        "OK চালায় · ডান প্রিয় · BACK বন্ধ",
+        "OK plays · RIGHT favourite · BACK close",
+    )
+
     @Composable fun racing(count: Int) = text(
         "একসাথে $count টি মিরর চেষ্টা হচ্ছে…",
         "Trying $count mirrors at once…",
@@ -265,4 +275,72 @@ object Copy {
         "এখন কোনো চ্যানেল নেই।",
         "There are no active streams right now.",
     )
+
+    // ---- The site's own watch-page and home-panel words ----
+
+    @Composable fun allChannelsHeading() = text("সব চ্যানেল", "All Channels")
+
+    @Composable fun categoryChannelsHeading(title: String) =
+        text("$title চ্যানেল", "$title Channels")
+
+    @Composable fun liveCount(count: Int) = text("$count লাইভ", "$count Live")
+
+    @Composable fun lockingSignal() = text(
+        "স্যাটেলাইট সিগন্যাল লক হচ্ছে…",
+        "Locking onto satellite signal...",
+    )
+
+    @Composable fun weakSignalTitle() = text(
+        "স্যাটেলাইট সিগন্যাল দুর্বল",
+        "Satellite Signal Weak",
+    )
+
+    @Composable fun weakSignalTail() = text(
+        "— স্ট্রিম লক করা যাচ্ছে না।",
+        "— Unable to lock onto stream.",
+    )
+
+    @Composable fun switchNextMirror() = text(
+        "পরের সরাসরি মিররে যান",
+        "Switch to Next Direct Mirror",
+    )
+
+    @Composable fun autoQuality() = text("অটো (অ্যাডাপ্টিভ)", "Auto (Adaptive)")
+
+    @Composable fun mute() = text("নিঃশব্দ", "Mute")
+
+    @Composable fun unmute() = text("শব্দ চালু", "Unmute")
+
+    @Composable fun volume() = text("শব্দের মাত্রা", "Volume")
+
+    @Composable fun quality() = text("কোয়ালিটি", "Quality")
+
+    @Composable fun loadingChannels() = text("চ্যানেল আসছে…", "Loading channels...")
+
+    @Composable fun noChannelsRightNow() = text(
+        "এখন কোনো চ্যানেল অনলাইনে নেই",
+        "No channels online right now",
+    )
+
+    @Composable fun noChannelsUnder(name: String) = text(
+        "\"$name\"-এর অধীনে কোনো চ্যানেল নেই",
+        "No channels under \"$name\"",
+    )
+
+    @Composable fun noChannelsOnlineTitle() = text("কোনো চ্যানেল অনলাইনে নেই", "No Channels Online")
+
+    @Composable fun noCategoryChannelsTitle(name: String) =
+        text("কোনো $name চ্যানেল নেই", "No $name Channels")
+
+    @Composable fun emptyCategoryBody() = text(
+        "এই মুহূর্তে এই বিভাগে কিছুই লাইভ নেই। সব চ্যানেল দেখতে All বেছে নিন।",
+        "Nothing is live under this category right now. Pick All to see every channel.",
+    )
+
+    @Composable fun emptyAllBody() = text(
+        "এই মুহূর্তে কোনো সক্রিয় স্ট্রিম নেই। অনুগ্রহ করে কিছুক্ষণ পর আবার দেখুন।",
+        "There are no active streams right now. Please check back shortly.",
+    )
+
+    @Composable fun homeFooter() = "SoluPlay • 24/7 Automated Live HD Streams"
 }

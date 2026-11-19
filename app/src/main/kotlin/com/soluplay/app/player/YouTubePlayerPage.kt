@@ -62,6 +62,37 @@ var lastState = -1;
 var playCalls = 0;
 var nudges = 0;
 var held = false;
+var wantedVolume = 100;
+var wantedMute = false;
+
+/* The app's level and silence, put on whatever player is up. A player the
+   page makes starts at full volume of its own accord, so the level is put
+   back after every video. */
+function volume(v) {
+  wantedVolume = Math.max(0, Math.min(100, v | 0));
+  applyAudio();
+}
+
+function mute(m) {
+  wantedMute = !!m;
+  applyAudio();
+}
+
+function applyAudio() {
+  if (player && player.setVolume) {
+    try {
+      player.setVolume(wantedVolume);
+      if (wantedMute) { player.mute(); } else { player.unMute(); }
+    } catch (err) { }
+    return;
+  }
+  var frame = document.getElementById('youtube-frame');
+  if (!frame || !frame.contentWindow) return;
+  try {
+    frame.contentWindow.postMessage(JSON.stringify({event: 'command', func: 'setVolume', args: [wantedVolume]}), '*');
+    frame.contentWindow.postMessage(JSON.stringify({event: 'command', func: wantedMute ? 'mute' : 'unMute', args: ''}), '*');
+  } catch (err) { }
+}
 
 /* The app is told what the player does. */
 function report(name, value) {
@@ -143,6 +174,7 @@ function create(videoId) {
     events: {
       onReady: function (e) {
         reportReady();
+        applyAudio();
         try { e.target.playVideo(); } catch (err) { }
       },
       onStateChange: function (e) { reportState(e.data); },
@@ -181,6 +213,7 @@ function keepTalking() {
     try {
       frame.contentWindow.postMessage(JSON.stringify({event: 'listening', id: 1, channel: 'widget'}), '*');
       frame.contentWindow.postMessage(JSON.stringify({event: 'command', func: 'playVideo', args: ''}), '*');
+      applyAudio();
     } catch (err) { }
   }
   setTimeout(keepTalking, 500);
