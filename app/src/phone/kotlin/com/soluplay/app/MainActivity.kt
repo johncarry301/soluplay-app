@@ -1,5 +1,10 @@
 package com.soluplay.app
 
+import android.app.UiModeManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,12 +33,16 @@ import com.soluplay.core.ui.UpdateBlockPanel
 import com.soluplay.core.ui.UpdateSheet
 import com.soluplay.core.update.UpdateState
 import com.soluplay.phone.PhoneShell
+import com.soluplay.tv.TvActivity
 
 /**
  * The handset entry. It lives in the phone flavour because the TV build has
  * no phone surface to open.
  */
 class MainActivity : ComponentActivity() {
+
+    /** Set when the door was only a passage to the television screen. */
+    private var forwarded = false
 
     private val browseViewModel: BrowseViewModel by viewModels {
         BrowseViewModelFactory(AppGraph.repository(applicationContext))
@@ -71,6 +80,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // A box whose launcher opens the handset door is still a television:
+        // the plain LAUNCHER category lands here on any box that does not run
+        // the Android TV home, so the television is sent to its own screen
+        // before a single frame of the phone is drawn.
+        if (isTelevision()) {
+            forwarded = true
+            startActivity(Intent(this, TvActivity::class.java))
+            finish()
+            return
+        }
+
         AppGraph.prepare(applicationContext)
         setContent {
             SoluPlayTheme {
@@ -121,7 +142,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onResume() {
         super.onResume()
-        updateViewModel.check()
+        if (!forwarded) updateViewModel.check()
     }
 
     /**
@@ -132,7 +153,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onStart() {
         super.onStart()
-        playbackViewModel.exitBackground()
+        if (!forwarded) playbackViewModel.exitBackground()
     }
 
     /**
@@ -144,12 +165,26 @@ class MainActivity : ComponentActivity() {
      * given up.
      */
     override fun onStop() {
-        playbackViewModel.enterBackground()
+        if (!forwarded) playbackViewModel.enterBackground()
         super.onStop()
     }
 
     /** The screen where the owner lets this app install its own updates. */
     private fun allowInstall() {
         startActivity(ApkInstaller(applicationContext).permissionIntent())
+    }
+
+    /**
+     * Whether this device is a television.
+     *
+     * Three answers count as yes: the device says it is in television mode,
+     * it carries the leanback feature, or it has no touchscreen at all — a
+     * box that never declared itself a TV still cannot be a handset.
+     */
+    private fun isTelevision(): Boolean {
+        val uiMode = getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+        return uiMode.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+            packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            !packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
     }
 }
