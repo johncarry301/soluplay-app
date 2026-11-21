@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -215,6 +216,11 @@ fun TvScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(focus)
+            // The picture has to hold the keys itself: key events are only
+            // delivered to whatever holds focus, so a screen that only asks
+            // for focus — without being a focus target — is sent nothing and
+            // the remote does nothing at all.
+            .focusable()
             .onPreviewKeyEvent { onKey(it.nativeKeyEvent) },
     ) {
         PlayerSurface(host = host, modifier = Modifier.fillMaxSize())
