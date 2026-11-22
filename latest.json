@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "appId": "com.soluplay.app",
-  "versionCode": 4,
-  "versionName": "0.2.2",
-  "updatedAt": "2026-11-19T15:25:34Z",
-  "releaseNotes": "SoluPlay 0.2.2 — the phone looks and plays like the site, and the TV becomes a real television: open it, and the first channel is on.",
-  "apkUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.2/SoluPlay.apk",
-  "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.2/SoluPlay.apk",
+  "versionCode": 7,
+  "versionName": "0.2.5",
+  "updatedAt": "2026-11-22T06:56:20Z",
+  "releaseNotes": "SoluPlay 0.2.5 — the television remote gets the keys viewers expect, and a channel that fails once is tried again instead of going straight to static.",
+  "apkUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.5/SoluPlay.apk",
+  "downloadUrl": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.5/SoluPlay.apk",
   "fileName": "SoluPlay.apk",
-  "sizeBytes": 2749850,
-  "sha256": "6fd68a6c24b988d71a30b83bc38fe7a203f564429761d8359f1e6e26a7ca312c",
+  "sizeBytes": 2754451,
+  "sha256": "4fc4c0a8595aa25781ba692ab4147bd18e25d6a05c73b4f967712509f243f848",
   "mandatory": false,
   "minSupportedVersionCode": 0,
   "rolloutPercent": 100,
@@ -22,18 +22,18 @@
   "variants": {
     "phone": {
       "label": "Android Phone & Tablet",
-      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.2/SoluPlay.apk",
+      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.5/SoluPlay.apk",
       "fileName": "SoluPlay.apk",
-      "sizeBytes": 2749850,
-      "sha256": "6fd68a6c24b988d71a30b83bc38fe7a203f564429761d8359f1e6e26a7ca312c",
+      "sizeBytes": 2754451,
+      "sha256": "4fc4c0a8595aa25781ba692ab4147bd18e25d6a05c73b4f967712509f243f848",
       "minSdkVersion": 21
     },
     "tv": {
       "label": "Android TV & TV Boxes",
-      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.2/SoluPlay.apk",
+      "url": "https://github.com/johncarry301/soluplay-app/releases/download/v0.2.5/SoluPlay.apk",
       "fileName": "SoluPlay.apk",
-      "sizeBytes": 2749850,
-      "sha256": "6fd68a6c24b988d71a30b83bc38fe7a203f564429761d8359f1e6e26a7ca312c",
+      "sizeBytes": 2754451,
+      "sha256": "4fc4c0a8595aa25781ba692ab4147bd18e25d6a05c73b4f967712509f243f848",
       "minSdkVersion": 21
     }
   }
