@@ -50,6 +50,9 @@ class TvActivity : ComponentActivity() {
         PlaybackViewModelFactory(
             repository = AppGraph.repository(applicationContext),
             host = host,
+            // A television's certificate store is much older than a phone's,
+            // so the plain HTTP mirrors are tried before the secure ones.
+            preferHttpMirrors = true,
         )
     }
 

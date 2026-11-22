@@ -24,6 +24,14 @@ class PlaybackViewModel(
     private val repository: CatalogueRepository,
     private val host: PlaybackHost,
     private val machine: PlaybackMachine = PlaybackMachine(),
+    /**
+     * True on a television, where the plain HTTP mirrors are tried first.
+     *
+     * A box's certificate store is rarely as new as a phone's, so a mirror
+     * that a television turns away over HTTPS often plays over HTTP without
+     * any trouble. The site's order inside each group is kept.
+     */
+    private val preferHttpMirrors: Boolean = false,
 ) : ViewModel(), PlaybackListener {
 
     private val _state = MutableStateFlow(PlaybackState())
@@ -78,7 +86,7 @@ class PlaybackViewModel(
         publish()
 
         viewModelScope.launch {
-            val detail = repository.liveChannelDetail(channelId)
+            val detail = readDetail(channelId, session)
             if (!machine.isCurrentSession(session)) return@launch
 
             if (detail == null) {
@@ -87,10 +95,45 @@ class PlaybackViewModel(
                 return@launch
             }
 
-            apply(machine.start(detail, session))
+            apply(machine.start(orderedForThisDevice(detail), session))
             rehold()
             publish()
         }
+    }
+
+    /**
+     * The channel's ladder, read once more if the first read did not answer.
+     *
+     * A television that has just been switched on can lose its first request
+     * before its network is up. A single failed read used to leave the screen
+     * on the static for good, which is why leaving the channel and coming
+     * back was the only way to get a picture: the same ladder is now asked
+     * for again a moment later instead.
+     */
+    private suspend fun readDetail(channelId: String, session: Long): ChannelDetail? {
+        repeat(LADDER_READ_ATTEMPTS) { attempt ->
+            val detail = repository.liveChannelDetail(channelId)
+            if (detail != null) return detail
+            if (!machine.isCurrentSession(session)) return null
+            if (attempt < LADDER_READ_ATTEMPTS - 1) delay(LADDER_READ_RETRY_MS)
+        }
+        return null
+    }
+
+    /**
+     * The ladder in the order this device should walk it.
+     *
+     * Only the television asks for the plain HTTP mirrors first; the phone
+     * keeps the site's own order, because its certificate store is current.
+     * Whatever is done here, the order is fixed before the machine sees it,
+     * so the walk still has one order and one rank for every mirror.
+     */
+    private fun orderedForThisDevice(detail: ChannelDetail): ChannelDetail {
+        if (!preferHttpMirrors) return detail
+        val plain = detail.streams.filter { it.url.startsWith("http://", ignoreCase = true) }
+        if (plain.isEmpty() || plain.size == detail.streams.size) return detail
+        val secure = detail.streams.filterNot { it.url.startsWith("http://", ignoreCase = true) }
+        return detail.copy(streams = plain + secure)
     }
 
     /**
@@ -291,7 +334,7 @@ class PlaybackViewModel(
         machine.beginRefresh()
 
         viewModelScope.launch {
-            val detail = repository.liveChannelDetail(channelId)
+            val detail = readDetail(channelId, session)
             if (!machine.isCurrentSession(session)) return@launch
 
             if (detail == null) {
@@ -300,7 +343,7 @@ class PlaybackViewModel(
                 return@launch
             }
 
-            apply(machine.start(detail, session))
+            apply(machine.start(orderedForThisDevice(detail), session))
             rehold()
             publish()
         }
@@ -325,6 +368,12 @@ class PlaybackViewModel(
         /** How often the deadlines are checked and the player's clock read. */
         const val POLL_INTERVAL_MS = 500L
 
+        /** How many times the channel's ladder is asked for before giving up. */
+        const val LADDER_READ_ATTEMPTS = 3
+
+        /** How long to wait between those reads. */
+        const val LADDER_READ_RETRY_MS = 900L
+
         /** The one mirror a match link is played as; it matches no catalogue row. */
         const val DIRECT_LINK_STREAM_ID = "match-direct"
     }
@@ -334,12 +383,13 @@ class PlaybackViewModel(
 class PlaybackViewModelFactory(
     private val repository: CatalogueRepository,
     private val host: PlaybackHost,
+    private val preferHttpMirrors: Boolean = false,
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PlaybackViewModel::class.java)) {
-            return PlaybackViewModel(repository, host) as T
+            return PlaybackViewModel(repository, host, preferHttpMirrors = preferHttpMirrors) as T
         }
         throw IllegalArgumentException("Unknown view model ${modelClass.name}")
     }
