@@ -78,6 +78,8 @@ object Copy {
         "OK plays · RIGHT favourite · BACK close",
     )
 
+    @Composable fun noSignal() = text("সিগন্যাল নেই", "No signal")
+
     @Composable fun racing(count: Int) = text(
         "একসাথে $count টি মিরর চেষ্টা হচ্ছে…",
         "Trying $count mirrors at once…",

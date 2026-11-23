@@ -131,6 +131,21 @@ class UpdateViewModel(
         }
     }
 
+    /**
+     * The app came back to the front.
+     *
+     * A person who was sent to the system's permission screen and has now
+     * allowed this app to install packages is taken on to the install. Without
+     * this the only button on the sheet reopened the same screen, and the
+     * build that had already been downloaded could never be installed.
+     */
+    fun resume() {
+        val current = _state.value
+        if (current !is UpdateState.PermissionNeeded) return
+        if (!installer.canInstall()) return
+        install()
+    }
+
     /** The download, with the fingerprint checked before the file is kept. */
     private suspend fun download(offer: UpdateOffer): File? {
         _state.value = UpdateState.Downloading(offer, 0, offer.sizeBytes)

@@ -142,7 +142,11 @@ class MainActivity : ComponentActivity() {
      */
     override fun onResume() {
         super.onResume()
-        if (!forwarded) updateViewModel.check()
+        if (forwarded) return
+        updateViewModel.check()
+        // A person who has just allowed this app to install packages is taken
+        // on to the install rather than back to the permission screen.
+        updateViewModel.resume()
     }
 
     /**

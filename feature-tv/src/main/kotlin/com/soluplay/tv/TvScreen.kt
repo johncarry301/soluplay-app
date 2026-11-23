@@ -111,6 +111,9 @@ fun TvScreen(
     /** The channel number being typed on the remote, before it is played. */
     var typed by remember { mutableStateOf("") }
 
+    /** True while the channel number is on the screen. */
+    var numberShown by remember { mutableStateOf(false) }
+
     val focus = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -120,6 +123,18 @@ fun TvScreen(
         zap = null
         typed = ""
         playback.open(channel.id, channel.name, channel.logo)
+    }
+
+    // The channel number shows when a channel changes and takes itself off
+    // the screen again, so the corner is only covered for a moment.
+    LaunchedEffect(current?.id, typed) {
+        if (current == null) {
+            numberShown = false
+            return@LaunchedEffect
+        }
+        numberShown = true
+        delay(NUMBER_VISIBLE_MS)
+        if (typed.isEmpty()) numberShown = false
     }
 
     // A typed number is played once the viewer has stopped typing for a
@@ -321,12 +336,12 @@ fun TvScreen(
         }
 
         if (dead) {
-            TvStatic(modifier = Modifier.fillMaxSize())
+            TvNoSignal(modifier = Modifier.fillMaxSize())
         }
 
         // The channel number, at the corner the picture keeps free. While a
         // number is being typed on the remote, the typed number is shown.
-        if (current != null) {
+        if (current != null && numberShown) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -484,6 +499,9 @@ private val SidebarLitRow = Color(0xFF123152)
 
 /** How long the viewer has between the digits of a channel number. */
 private const val NUMBER_COMMIT_MS = 1_200L
+
+/** How long the channel number stays in the corner after a change. */
+private const val NUMBER_VISIBLE_MS = 10_000L
 
 /** A channel number on the remote is at most this many digits. */
 private const val MAX_NUMBER_DIGITS = 3

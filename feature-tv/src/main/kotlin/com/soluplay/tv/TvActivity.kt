@@ -125,6 +125,9 @@ class TvActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updateViewModel.check()
+        // A person who has just allowed this app to install packages is taken
+        // on to the install rather than back to the permission screen.
+        updateViewModel.resume()
     }
 
     /** The screen where the owner lets this app install its own updates. */
